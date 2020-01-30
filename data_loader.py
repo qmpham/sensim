@@ -415,10 +415,11 @@ class Dataset() :
     ### length of the data set to be used (not necessarily the whole set)
     self.length = 0
     self.tokenizer = tokenizer_class.from_pretrained(model_name_or_path, cache_dir=tokenizer_cache_dir if tokenizer_cache_dir else None)
-    assert len(self.files) == 3
+    assert len(self.files) == 3 or len(self.files) == 2
     self.src = self.files[0]
     self.tgt = self.files[1]
-    self.false_tgt = self.files[2]
+    if len(self.files) == 3:
+      self.false_tgt = self.files[2]
 
   def get_tokenizer(self):
     return self.tokenizer
@@ -450,8 +451,9 @@ class Dataset() :
     f_write_src.close()
     f_write_tgt.close()
 
-  def create_one_epoch(self, mode="p"):
-    self.shuffle()
+  def create_one_epoch(self, do_shuffle=True, mode="p"):
+    if do_shuffle:
+      self.shuffle()
     process_fn = process_fn_(self.tokenizer)
     if mode =="p":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.tgt)))

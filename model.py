@@ -34,29 +34,29 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         self.num_labels = config.num_labels
         self.transformer = TFXLMMainLayer(config, name='transformer')
         
-        self.src_forward_layer = tf.keras.layers.LSTM(512, return_sequences=True)
-        self.src_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True)
-        self.src_encoder = tf.keras.layers.Bidirectional(self.src_forward_layer, backward_layer=self.src_backward_layer, merge_mode="concat")
+        self.src_forward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=False, return_state=True)
+        self.src_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True, return_state=True)
+        self.src_encoder = tf.keras.layers.Bidirectional(self.src_forward_layer, backward_layer=self.src_backward_layer)
 
-        self.tgt_forward_layer = tf.keras.layers.LSTM(512, return_sequences=True)
-        self.tgt_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True)
-        self.tgt_encoder = tf.keras.layers.Bidirectional(self.tgt_forward_layer, backward_layer=self.tgt_backward_layer, merge_mode="concat")
+        self.tgt_forward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=False, return_state=True)
+        self.tgt_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True, return_state=True)
+        self.tgt_encoder = tf.keras.layers.Bidirectional(self.tgt_forward_layer, backward_layer=self.tgt_backward_layer)
         self.config = {"aggr":"lse"}
     @property
     def dummy_inputs(self):
         return ({"input_ids":tf.constant(DUMMY_INPUTS), "langs": tf.constant([[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]), "lengths": tf.constant([5,5,5])},
                 {"input_ids":tf.constant(DUMMY_INPUTS), "langs": tf.constant([[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]), "lengths": tf.constant([5,5,5])})
     
-    def call(self, inputs, src_padding_mask=None, tgt_padding_mask=None, training=None, **kwargs):       
+    def call(self, inputs, sign_src=1.0, sign_tgt=1.0, src_padding_mask=None, tgt_padding_mask=None, training=None, **kwargs):       
         src_inputs = inputs[0]
         tgt_inputs = inputs[1]
         src_transformer_outputs = self.transformer(src_inputs, **kwargs)
         tgt_transformer_outputs = self.transformer(tgt_inputs, **kwargs)
         src_output = src_transformer_outputs[0]
         tgt_output = tgt_transformer_outputs[0]
-
-        src = self.src_encoder(src_output, mask=src_padding_mask, training=training)
-        tgt = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training)
+        #print(self.src_encoder(src_output, mask=src_padding_mask, training=training))
+        src, _, _, _, _ = self.src_encoder(src_output, mask=src_padding_mask, training=training)
+        tgt, _, _, _, _ = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training)       
 
         self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
             
@@ -85,10 +85,9 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         else:
             sys.stderr.write("error: bad aggregation option '{}'\n".format(self.config.aggr))
             sys.exit(1)
-        self.sign_src = 1
-        self.sign_tgt = 1
-        self.output_src = tf.math.log(1 + tf.exp(self.aggregation_src * self.sign_src))
-        self.output_tgt = tf.math.log(1 + tf.exp(self.aggregation_tgt * self.sign_tgt))
+         
+        self.output_src = tf.math.log(1 + tf.exp(self.aggregation_src * sign_src))
+        self.output_tgt = tf.math.log(1 + tf.exp(self.aggregation_tgt * sign_tgt))
         self.loss_src = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
                                                          (self.output_src, src_inputs["lengths"]), dtype=tf.float32))
         self.loss_tgt = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
@@ -99,9 +98,15 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
 
     def encode(self, inputs, padding_mask, lang="en"):
       if lang == "en":
-        return self.src_encoder(self.transformer(inputs), mask=padding_mask, training=False)
+        transformer_outputs = self.transformer(inputs)
+        output = transformer_outputs[0]
+        _, _, _, fw_last, bw_last = self.src_encoder(output, mask=padding_mask, training=False)
+        return tf.concat([fw_last, bw_last],1)
       elif lang == "fr":
-        return self.tgt_encoder(self.transformer(inputs), mask=padding_mask, training=False)
+        transformer_outputs = self.transformer(inputs)
+        output = transformer_outputs[0]
+        _ , _, _, fw_last, bw_last = self.tgt_encoder(output, mask=padding_mask, training=False)
+        return tf.concat([fw_last, bw_last],1)
       else:
         sys.stderr.write("error: bad language option '{}'\n".format("en, fr"))
         sys.exit(1)

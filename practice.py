@@ -3,7 +3,6 @@ import torch
 from torch import nn
 from transformers import *
 from transformers import pipeline, glue_convert_examples_to_features
-import tensorflow_datasets
 from data_loader import training_pipeline, process_fn_, Dataset, function_on_next
 from model import TFXLMForSequenceEmbedding
 import argparse
@@ -13,6 +12,8 @@ import os
 import tensorflow_addons as tfa
 from optimization import *
 import numpy as np
+import faiss
+import sklearn 
 tf.get_logger().setLevel(logging.INFO)
 
 def build_mask(self, inputs, sequence_length=None, dtype=tf.bool):
@@ -21,6 +22,50 @@ def build_mask(self, inputs, sequence_length=None, dtype=tf.bool):
       return None
     return tf.sequence_mask(sequence_length, maxlen=tf.shape(inputs)[1], dtype=dtype)
 
+def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_name_or_path, tokenizer_class, tokenizer_cache_dir):
+  if ckpt_path == None:
+    ckpt_path = checkpoint_manager.latest_checkpoint
+  tf.get_logger().info("Evaluating model %s", ckpt_path)  
+  checkpoint.restore(ckpt_path)
+  validation_dataset = Dataset(config.get("validation_file_path",None),                
+              config.get("seq_size"), 
+              config.get("max_sents"), 
+              config.get("do_shuffle"), 
+              config.get("do_skip_empty"),
+              model_name_or_path = model_name_or_path,
+              tokenizer_class = tokenizer_class,
+              tokenizer_cache_dir = tokenizer_cache_dir)
+  iterator = iter(validation_dataset.create_one_epoch(do_shuffle=False, mode="p")) 
+
+  @tf.function
+  def encode_next():    
+    src, tgt = next(iterator)
+    padding_mask = build_mask(src["input_ids"], src["lengths"])
+    src_sentence_embedding = model.encode(src, padding_mask)
+    padding_mask = build_mask(tgt["input_ids"], tgt["lengths"])
+    tgt_sentence_embedding = model.encode(tgt, padding_mask)
+    return src_sentence_embedding, tgt_sentence_embedding
+  # Iterates on the dataset.  
+  src_sentence_embedding_list = []
+  tgt_sentence_embedding_list = []
+  while True:    
+    try:
+      src_sentence_embedding_, tgt_sentence_embedding_ = encode_next()
+      src_sentence_embedding_list.append(src_sentence_embedding_.numpy())
+      tgt_sentence_embedding_list.append(tgt_sentence_embedding_.numpy())      
+    except tf.errors.OutOfRangeError:
+      break
+  src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
+  tgt_sentences = np.concatenate(tgt_sentence_embedding_list, axis=0)
+  d = src_sentences.shape[-1]
+  index = faiss.IndexFlatIP(d)   # build the index
+  print("faiss state: ", index.is_trained)
+  index.add(src_sentences)       # add vectors to the index
+  print("number of sentences: %d"%index.ntotal)
+  k = 1
+  D, I = index.search(tgt_sentences, k)     # tgt -> src search  
+  print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
+  
 def main():
   devices = tf.config.experimental.list_logical_devices(device_type="GPU")
   print(devices)
@@ -74,8 +119,10 @@ def main():
   with strategy.scope():    
     gradient_accumulator = GradientAccumulator()  
 
-  def _accumulate_gradients(src, tgt):
-    _, _, _, loss = model((src,tgt))
+  def _accumulate_gradients(src, tgt, sign):
+    src_padding_mask = build_mask(src["input_ids"],src["lengths"])
+    tgt_padding_mask = build_mask(tgt["input_ids"],tgt["lengths"])
+    _, _, _, loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask)
     variables = model.trainable_variables
     print("var numb: ", len(variables))
     gradients = optimizer.get_gradients(loss, variables)
@@ -101,7 +148,7 @@ def main():
     with strategy.scope():
       per_replica_source, per_replica_target = next_fn()
       per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
-          _accumulate_gradients, args=(per_replica_source, per_replica_target))
+          _accumulate_gradients, args=(per_replica_source, per_replica_target, 1.0))
       loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
       num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
     return loss, num_examples
@@ -111,7 +158,7 @@ def main():
     with strategy.scope():
       per_replica_source, per_replica_target = next_fn()
       per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
-          _accumulate_gradients, args=(per_replica_source, per_replica_target))
+          _accumulate_gradients, args=(per_replica_source, per_replica_target, -1.0))
       loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
       num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
     return loss, num_examples
@@ -125,8 +172,8 @@ def main():
 
   _summary_writer = tf.summary.create_file_writer(config["model_dir"])
   report_every = config.get("report_every", 1)
-  save_every = config.get("save_every", 5000)
-  eval_every = config.get("eval_every", 5000)
+  save_every = config.get("save_every", 5)
+  eval_every = config.get("eval_every", 5)
   train_steps = config.get("train_steps", 100000)
 
   u_training_flow = iter(_u_train_forward())
@@ -160,7 +207,8 @@ def main():
             tf.get_logger().info("Saving checkpoint for step %d", step)
             checkpoint_manager.save(checkpoint_number=step)
           if step % eval_every == 0:
-            continue
+            ckpt_path = None
+            evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_name_or_path, tokenizer_class, tokenizer_cache_dir)
           tf.summary.flush()
           if step > train_steps:
             break
