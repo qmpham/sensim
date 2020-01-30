@@ -1,0 +1,7 @@
+model_dir: /home/minhquang/My_projects/sensim/models/xlm
+filepath: /home/minhquang/My_projects/sensim/models/xlm/data/JRC-Acquis.en-fr.en,/home/minhquang/My_projects/sensim/models/xlm/data/JRC-Acquis.en-fr.fr,/home/minhquang/My_projects/sensim/models/xlm/data/JRC-Acquis.en-fr.fr.false
+seq_size: 100
+max_sents: 20
+do_shuffle: true
+do_skip_empty: true
+validation_file_path: /home/minhquang/My_projects/sensim/models/xlm/data/JRC-Acquis.en-fr.en,/home/minhquang/My_projects/sensim/models/xlm/data/JRC-Acquis.en-fr.fr
