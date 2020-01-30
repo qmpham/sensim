@@ -41,7 +41,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         self.tgt_forward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=False, return_state=True)
         self.tgt_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True, return_state=True)
         self.tgt_encoder = tf.keras.layers.Bidirectional(self.tgt_forward_layer, backward_layer=self.tgt_backward_layer)
-        self.config = {"aggr":"lse"}
+        self.config = {"aggr":"sum"}
     @property
     def dummy_inputs(self):
         return ({"input_ids":tf.constant(DUMMY_INPUTS), "langs": tf.constant([[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]), "lengths": tf.constant([5,5,5])},
@@ -74,13 +74,13 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
                                                 (tf.transpose(self.align, [0, 2, 1]), tgt_inputs["lengths"]),
                                                 dtype=tf.float32, name="aggregation_src")
             self.aggregation_tgt = tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                (self.align, src_inputs["length"]),
+                                                (self.align, src_inputs["lengths"]),
                                                 dtype=tf.float32, name="aggregation_tgt")
         elif self.config["aggr"] == "max":
-            self.aggregation_src = tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
+            self.aggregation_src = tf.map_fn(lambda xl: tf.reduce_max(xl[0][:xl[1], :], 0),
                                                 (tf.transpose(self.align, [0, 2, 1]), tgt_inputs["lengths"]),
                                                 dtype=tf.float32, name="aggregation_src")
-            self.aggregation_tgt = tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
+            self.aggregation_tgt = tf.map_fn(lambda xl: tf.reduce_max(xl[0][:xl[1], :], 0),
                                                 (self.align, src_inputs["lengths"]),
                                                 dtype=tf.float32, name="aggregation_tgt")
         else:
