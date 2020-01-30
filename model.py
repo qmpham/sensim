@@ -57,7 +57,8 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         #print(self.src_encoder(src_output, mask=src_padding_mask, training=training))
         src, _, _, _, _ = self.src_encoder(src_output, mask=src_padding_mask, training=training)
         tgt, _, _, _, _ = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training)       
-
+        src =tf.nn.dropout(src, 0.1)
+        tgt =tf.nn.dropout(tgt, 0.1)
         self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
             
         R = 1.0
