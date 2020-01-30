@@ -2,16 +2,9 @@
 
 import numpy as np
 import tensorflow as tf
-
-# input_ids = inputs.get("input_ids")
-# attention_mask = inputs.get("attention_mask", attention_mask)
-# langs = inputs.get("langs", langs)
-# token_type_ids = inputs.get("token_type_ids", token_type_ids)
-# position_ids = inputs.get("position_ids", position_ids)
-# lengths = inputs.get("lengths", lengths)
-# cache = inputs.get("cache", cache)
-# head_mask = inputs.get("head_mask", head_mask)
-# inputs_embeds = inputs.get("inputs_embeds", inputs_embeds)
+import sys
+from transformers.tokenization_xlm import XLMTokenizer
+import gzip
 
 def _get_output_shapes(dataset):
   """Returns the outputs shapes of the dataset.
@@ -266,6 +259,7 @@ def batch_sequence_dataset(batch_size,
         "Invalid batch type: '{}'; should be 'examples' or 'tokens'".format(batch_type))
 
 def process_fn_(tokenizer):
+  @tf.autograph.experimental.do_not_convert
   def _tokenize_tensor(text, lang="en"):    
     def _python_wrapper(string_t):
       string = tf.compat.as_text(string_t.numpy())      
@@ -394,3 +388,91 @@ def function_on_next(dataset, as_numpy=False):
     return _fun
 
   return decorator
+
+class Dataset() :
+
+  def __init__(self, 
+              filepath,                
+              seq_size, 
+              max_sents, 
+              do_shuffle, 
+              do_skip_empty,
+              model_name_or_path = 'xlm-mlm-enfr-1024',
+              tokenizer_class = XLMTokenizer,
+              tokenizer_cache_dir = "models/xlm/tokenizer"):
+
+    if filepath is None:
+      sys.stderr.write("error: give some filepath")
+      sys.exit(1)
+
+    self.files = filepath.split(",")
+    self.seq_size = seq_size
+    self.max_sents = max_sents
+    self.do_shuffle = do_shuffle
+    self.do_skip_empty = do_skip_empty
+    self.annotated = False
+    self.data = []
+    ### length of the data set to be used (not necessarily the whole set)
+    self.length = 0
+    self.tokenizer = tokenizer_class.from_pretrained(model_name_or_path, cache_dir=tokenizer_cache_dir if tokenizer_cache_dir else None)
+    assert len(self.files) == 3
+    self.src = self.files[0]
+    self.tgt = self.files[1]
+    self.false_tgt = self.files[2]
+
+  def get_tokenizer(self):
+    return self.tokenizer
+
+  def shuffle(self):
+    f_read_src = open(self.src,"r")
+    f_read_tgt = open(self.tgt,"r")
+
+    line_read_src = [l.strip() for l in f_read_src]
+    line_read_tgt = [l.strip() for l in f_read_tgt]
+    self.dataset_size = len(line_read_src)
+
+    f_read_src.close()
+    f_read_tgt.close()
+
+    f_write_src = open(self.src,"w")
+    f_write_tgt = open(self.tgt,"w")   
+    f_write_false_tgt = open(self.false_tgt,"w")
+
+    inds = np.arange(self.dataset_size)
+    from random import shuffle
+    shuffle(inds)
+    for id in inds:
+      print(line_read_src[id], file=f_write_src)
+      print(line_read_tgt[id], file=f_write_tgt)
+      false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
+      print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
+
+    f_write_src.close()
+    f_write_tgt.close()
+
+  def create_one_epoch(self, mode="p"):
+    self.shuffle()
+    process_fn = process_fn_(self.tokenizer)
+    if mode =="p":
+      dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.tgt)))
+    elif mode == "u":
+      dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.false_tgt)))
+    batch_size = self.max_sents
+    dataset = dataset.apply(training_pipeline(batch_size,
+                      batch_type="examples",
+                      batch_multiplier=1,
+                      batch_size_multiple=1,
+                      process_fn=process_fn,
+                      length_bucket_width=1,
+                      features_length_fn = lambda src: tf.shape(src["input_ids"])[0],
+                      labels_length_fn = lambda tgt: tf.shape(tgt["input_ids"])[0],
+                      maximum_features_length=100,
+                      maximum_labels_length=100,
+                      single_pass=True,
+                      num_shards=1,
+                      shard_index=0,
+                      num_threads=None,
+                      shuffle_buffer_size=None,
+                      prefetch_buffer_size=200))
+
+    return dataset

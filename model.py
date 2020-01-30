@@ -41,14 +41,13 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         self.tgt_forward_layer = tf.keras.layers.LSTM(512, return_sequences=True)
         self.tgt_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True)
         self.tgt_encoder = tf.keras.layers.Bidirectional(self.tgt_forward_layer, backward_layer=self.tgt_backward_layer, merge_mode="concat")
-        self.sequence_summary = TFSequenceSummary(config, initializer_range=config.init_std, name="sequence_summary")
         self.config = {"aggr":"lse"}
     @property
     def dummy_inputs(self):
         return ({"input_ids":tf.constant(DUMMY_INPUTS), "langs": tf.constant([[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]), "lengths": tf.constant([5,5,5])},
                 {"input_ids":tf.constant(DUMMY_INPUTS), "langs": tf.constant([[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]), "lengths": tf.constant([5,5,5])})
     
-    def call(self, inputs, src_mask=None, tgt_mask=None, training=None, **kwargs):       
+    def call(self, inputs, src_padding_mask=None, tgt_padding_mask=None, training=None, **kwargs):       
         src_inputs = inputs[0]
         tgt_inputs = inputs[1]
         src_transformer_outputs = self.transformer(src_inputs, **kwargs)
@@ -56,8 +55,8 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         src_output = src_transformer_outputs[0]
         tgt_output = tgt_transformer_outputs[0]
 
-        src = self.src_encoder(src_output, mask=src_mask, training=training)
-        tgt = self.tgt_encoder(tgt_output, mask=tgt_mask, training=training)
+        src = self.src_encoder(src_output, mask=src_padding_mask, training=training)
+        tgt = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training)
 
         self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
             
@@ -95,4 +94,15 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         self.loss_tgt = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
                                                          (self.output_tgt, tgt_inputs["lengths"]), dtype=tf.float32))
         self.loss = self.loss_tgt + self.loss_src
-        return self.align, self.output_src, self.output_tgt, self.loss #self.output_src, self.output_tgt
+
+        return self.align, self.aggregation_src, self.aggregation_tgt, self.loss
+
+    def encode(self, inputs, padding_mask, lang="en"):
+      if lang == "en":
+        return self.src_encoder(self.transformer(inputs), mask=padding_mask, training=False)
+      elif lang == "fr":
+        return self.tgt_encoder(self.transformer(inputs), mask=padding_mask, training=False)
+      else:
+        sys.stderr.write("error: bad language option '{}'\n".format("en, fr"))
+        sys.exit(1)
+    

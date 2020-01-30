@@ -4,79 +4,192 @@ from torch import nn
 from transformers import *
 from transformers import pipeline, glue_convert_examples_to_features
 import tensorflow_datasets
-from data_loader import training_pipeline, process_fn_
+from data_loader import training_pipeline, process_fn_, Dataset, function_on_next
 from model import TFXLMForSequenceEmbedding
-data = tf.data.TextLineDataset('/home/minhquang/reference/UFAL.med.en-fr.tst.en')
-#### xlm model configuration
-# vocab_size=30145,
-# emb_dim=2048,
-# n_layers=12,
-# n_heads=16,
-# dropout=0.1,
-# attention_dropout=0.1,
-# gelu_activation=True,
-# sinusoidal_embeddings=False,
-# causal=False,
-# asm=False,
-# n_langs=1,
-# use_lang_emb=True,
-# max_position_embeddings=512,
-# embed_init_std=2048 ** -0.5,
-# layer_norm_eps=1e-12,
-# init_std=0.02,
-# bos_index=0,
-# eos_index=1,
-# pad_index=2,
-# unk_index=3,
-# mask_index=5,
-# is_encoder=True,
-# summary_type='first',
-# summary_use_proj=True,
-# summary_activation=None,
-# summary_proj_to_labels=True,
-# summary_first_dropout=0.1,
-# start_n_top=5,
-# end_n_top=5,
-###
+import argparse
+import logging
+import yaml
+import os
+import tensorflow_addons as tfa
+from optimization import *
+import numpy as np
+tf.get_logger().setLevel(logging.INFO)
 
-config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
-model_name_or_path = 'xlm-mlm-enfr-1024'
-cache_dir = "models/xlm"
-config_name = None
-tokenizer_name = None
-config = config_class.from_pretrained(
-    model_name_or_path,    
-    cache_dir=cache_dir if cache_dir else None)
-tokenizer = tokenizer_class.from_pretrained(
-    model_name_or_path,
-    cache_dir=cache_dir if cache_dir else None)
-model = model_class.from_pretrained(
-    model_name_or_path,
-    config=config,
-    cache_dir=cache_dir if cache_dir else None)
-print(tokenizer.encode("he is going", add_special_tokens=True))
-####
-process_fn = process_fn_(tokenizer)
-dataset = tf.data.Dataset.zip((tf.data.TextLineDataset('test.en'),tf.data.TextLineDataset('test.fr')))
-batch_size = 10  
-train_dataset = dataset.apply(training_pipeline(batch_size,
-                  batch_type="examples",
-                  batch_multiplier=1,
-                  batch_size_multiple=1,
-                  process_fn=process_fn,
-                  length_bucket_width=None,
-                  features_length_fn = lambda src: tf.shape(src["input_ids"])[0],
-                  labels_length_fn = lambda tgt: tf.shape(tgt["input_ids"])[0],
-                  maximum_features_length=50,
-                  maximum_labels_length=50,
-                  single_pass=False,
-                  num_shards=1,
-                  shard_index=0,
-                  num_threads=None,
-                  shuffle_buffer_size=None,
-                  prefetch_buffer_size=200))
-for element in train_dataset:
-  print(element)
-  print(tokenizer.decode(element[0]["input_ids"][0], skip_special_tokens=True, clean_up_tokenization_spaces=False))
-  print(tokenizer.decode(element[1]["input_ids"][0], skip_special_tokens=True, clean_up_tokenization_spaces=False))
-  print(model(element))
+def build_mask(self, inputs, sequence_length=None, dtype=tf.bool):
+    """Builds a boolean mask for :obj:`inputs`."""
+    if sequence_length is None:
+      return None
+    return tf.sequence_mask(sequence_length, maxlen=tf.shape(inputs)[1], dtype=dtype)
+
+def main():
+  devices = tf.config.experimental.list_logical_devices(device_type="GPU")
+  print(devices)
+  strategy = tf.distribute.MirroredStrategy(devices=[d.name for d in devices])
+  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument("run", choices=["train", "debug", "encode" ], help="Run type.")
+  parser.add_argument("--config", required=True , help="configuration file")
+  parser.add_argument("--file")
+  parser.add_argument("--ckpt", default=None)
+  parser.add_argument("--output", default="sentembedding")
+
+  args = parser.parse_args()
+  print("Running mode: ", args.run)
+  config_file = args.config
+  with open(config_file, "r") as stream:
+      config = yaml.load(stream)
+  if not os.path.exists(os.path.join(config["model_dir"],"eval")):
+    os.makedirs(os.path.join(config["model_dir"],"eval"))
+
+  #####
+  config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
+  model_name_or_path = 'xlm-mlm-enfr-1024'
+  config_cache_dir = "models/xlm/config" 
+  model_cache_dir = "models/xlm/model"
+  tokenizer_cache_dir = "models/xlm/tokenizer"
+  #####
+  train_dataset = Dataset(config.get("filepath",None),                
+              config.get("seq_size"), 
+              config.get("max_sents"), 
+              config.get("do_shuffle"), 
+              config.get("do_skip_empty"),
+              model_name_or_path = model_name_or_path,
+              tokenizer_class = tokenizer_class,
+              tokenizer_cache_dir = tokenizer_cache_dir)
+  pretrained_config = config_class.from_pretrained(
+      model_name_or_path,    
+      cache_dir=config_cache_dir if config_cache_dir else None)
+  with strategy.scope():  
+    model = model_class.from_pretrained(
+      model_name_or_path,
+      config=pretrained_config,
+      cache_dir=model_cache_dir if model_cache_dir else None)  
+  tokenizer = train_dataset.get_tokenizer()
+  ##### Optimizers
+  learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",16))
+  optimizer = tfa.optimizers.LazyAdam(learning_rate)
+  checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
+  checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
+  #####
+  ##### Training functions
+  with strategy.scope():    
+    gradient_accumulator = GradientAccumulator()  
+
+  def _accumulate_gradients(src, tgt):
+    _, _, _, loss = model((src,tgt))
+    variables = model.trainable_variables
+    print("var numb: ", len(variables))
+    gradients = optimizer.get_gradients(loss, variables)
+    gradient_accumulator(gradients)
+    num_examples = tf.shape(src["input_ids"])[0]
+    return loss, num_examples
+
+  def _apply_gradients():
+    variables = model.trainable_variables
+    grads_and_vars = []
+    for gradient, variable in zip(gradient_accumulator.gradients, variables):
+      # optimizer.apply_gradients will sum the gradients accross replicas.
+      scaled_gradient = gradient / (strategy.num_replicas_in_sync * tf.cast(gradient_accumulator.step, tf.float32))
+      grads_and_vars.append((scaled_gradient, variable))
+    optimizer.apply_gradients(grads_and_vars)
+    gradient_accumulator.reset()
+  
+  u_epoch_dataset = train_dataset.create_one_epoch(mode="u")
+  p_epoch_dataset = train_dataset.create_one_epoch(mode="p")
+
+  @function_on_next(u_epoch_dataset)
+  def _u_train_forward(next_fn):    
+    with strategy.scope():
+      per_replica_source, per_replica_target = next_fn()
+      per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
+          _accumulate_gradients, args=(per_replica_source, per_replica_target))
+      loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
+      num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
+    return loss, num_examples
+
+  @function_on_next(p_epoch_dataset)
+  def _p_train_forward(next_fn):    
+    with strategy.scope():
+      per_replica_source, per_replica_target = next_fn()
+      per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
+          _accumulate_gradients, args=(per_replica_source, per_replica_target))
+      loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
+      num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
+    return loss, num_examples
+  
+  @tf.function
+  def _step():
+    with strategy.scope():
+      strategy.experimental_run_v2(_apply_gradients)
+
+  #### Training  
+
+  _summary_writer = tf.summary.create_file_writer(config["model_dir"])
+  report_every = config.get("report_every", 1)
+  save_every = config.get("save_every", 5000)
+  eval_every = config.get("eval_every", 5000)
+  train_steps = config.get("train_steps", 100000)
+
+  u_training_flow = iter(_u_train_forward())
+  p_training_flow = iter(_p_train_forward())
+
+  p_losses = []
+  u_losses = []
+  _number_examples = []
+  import time
+  start = time.time()
+  with _summary_writer.as_default():
+    while True:    
+        try:
+          p_loss, p_examples_num = next(u_training_flow)
+          u_loss, u_examples_num = next(p_training_flow)
+          _step()
+          p_losses.append(p_loss)
+          u_losses.append(u_loss)
+          _number_examples.extend([p_examples_num, u_examples_num])
+          step = optimizer.iterations.numpy()
+          if step % report_every == 0:
+            elapsed = time.time() - start
+            tf.get_logger().info(
+            "Step = %d ; Learning rate = %f ; u_loss = %f; p_loss = %f, number_examples = %d, after %f seconds",
+            step, learning_rate(step), np.mean(u_losses), np.mean(p_losses), np.sum(_number_examples), elapsed)
+            start = time.time()
+            u_losses = []
+            p_losses = []
+            _number_examples = []
+          if step % save_every == 0:
+            tf.get_logger().info("Saving checkpoint for step %d", step)
+            checkpoint_manager.save(checkpoint_number=step)
+          if step % eval_every == 0:
+            continue
+          tf.summary.flush()
+          if step > train_steps:
+            break
+        except StopIteration: #tf.errors.OutOfRangeError:
+          print("next epoch")
+          u_epoch_dataset = train_dataset.create_one_epoch(mode="u")
+          p_epoch_dataset = train_dataset.create_one_epoch(mode="p")
+          @function_on_next(u_epoch_dataset)
+          def _u_train_forward(next_fn):    
+            with strategy.scope():
+              per_replica_source, per_replica_target = next_fn()
+              per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
+                  _accumulate_gradients, args=(per_replica_source, per_replica_target))
+              loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
+              num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
+            return loss, num_examples
+
+          @function_on_next(p_epoch_dataset)
+          def _p_train_forward(next_fn):    
+            with strategy.scope():
+              per_replica_source, per_replica_target = next_fn()
+              per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
+                  _accumulate_gradients, args=(per_replica_source, per_replica_target))
+              loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
+              num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
+            return loss, num_examples
+          
+          u_training_flow = iter(_u_train_forward())
+          p_training_flow = iter(_p_train_forward())
+
+if __name__ == "__main__":
+  main()
