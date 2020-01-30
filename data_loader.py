@@ -3,6 +3,15 @@
 import numpy as np
 import tensorflow as tf
 
+# input_ids = inputs.get("input_ids")
+# attention_mask = inputs.get("attention_mask", attention_mask)
+# langs = inputs.get("langs", langs)
+# token_type_ids = inputs.get("token_type_ids", token_type_ids)
+# position_ids = inputs.get("position_ids", position_ids)
+# lengths = inputs.get("lengths", lengths)
+# cache = inputs.get("cache", cache)
+# head_mask = inputs.get("head_mask", head_mask)
+# inputs_embeds = inputs.get("inputs_embeds", inputs_embeds)
 
 def _get_output_shapes(dataset):
   """Returns the outputs shapes of the dataset.
@@ -58,19 +67,7 @@ def filter_examples_by_length(maximum_features_length=None,
                               maximum_labels_length=None,
                               features_length_fn=None,
                               labels_length_fn=None):
-  """Transformation that constrains examples length.
-
-  Args:
-    maximum_features_length: The maximum length or list of maximum lengths of
-      the features sequence(s). ``None`` to not constrain the length.
-    maximum_labels_length: The maximum length of the labels sequence.
-      ``None`` to not constrain the length.
-    features_length_fn: A function mapping features to a sequence length.
-    labels_length_fn: A function mapping labels to a sequence length.
-
-  Returns:
-    A ``tf.data.Dataset`` transformation.
-  """
+  
   if features_length_fn is None and labels_length_fn is None:
     return lambda dataset: dataset
 
@@ -165,7 +162,7 @@ def batch_dataset(batch_size, padded_shapes=None):
     :func:`opennmt.data.batch_sequence_dataset`
   """
   return lambda dataset: dataset.padded_batch(
-      batch_size, padded_shapes=padded_shapes or _get_output_shapes(dataset))
+      batch_size, padding_values=({"input_ids":2,"langs":0,"lengths":0},{"input_ids":2,"langs":1,"lengths":0}), padded_shapes=padded_shapes or _get_output_shapes(dataset))
 
 def batch_sequence_dataset(batch_size,
                            batch_type="examples",
@@ -269,17 +266,22 @@ def batch_sequence_dataset(batch_size,
         "Invalid batch type: '{}'; should be 'examples' or 'tokens'".format(batch_type))
 
 def process_fn_(tokenizer):
-  def _tokenize_tensor(text):    
+  def _tokenize_tensor(text, lang="en"):    
     def _python_wrapper(string_t):
-      string = tf.compat.as_text(string_t.numpy())
+      string = tf.compat.as_text(string_t.numpy())      
       tokens = tokenizer.encode(string,add_special_tokens=True)
-      return tf.constant(tokens)
-    tokens = tf.py_function(_python_wrapper, [text], tf.int32)
+      langs = [lang] * len(tokens)
+      return tf.constant(tokens), tf.constant(langs)
+    tokens, langs = tf.py_function(_python_wrapper, [text], (tf.int32, tf.int32))
     tokens.set_shape([None])
-    return tokens
+    langs.set_shape([None])
+    return tokens, langs
 
   def process_fn(src,tgt):
-    return (_tokenize_tensor(src), _tokenize_tensor(tgt))
+    src_ids, langs_src = _tokenize_tensor(src, lang=0)
+    tgt_ids, langs_tgt = _tokenize_tensor(tgt, lang=1)
+    return ({"input_ids": src_ids, "langs": langs_src, "lengths": tf.shape(src_ids)[0]},
+            {"input_ids": tgt_ids, "langs": langs_tgt, "lengths": tf.shape(tgt_ids)[0]})
   return process_fn
 
 def training_pipeline(batch_size,
@@ -318,9 +320,8 @@ def training_pipeline(batch_size,
         batch_size_multiple=batch_size_multiple,
         length_bucket_width=length_bucket_width,
         length_fn=[features_length_fn, labels_length_fn]))
-    dataset = dataset.apply(filter_irregular_batches(batch_multiplier))
-    if not single_pass:
-      dataset = dataset.repeat()
+    #if not single_pass:
+    #  dataset = dataset.repeat()
     dataset = dataset.prefetch(prefetch_buffer_size)
     return dataset
 
