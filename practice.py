@@ -77,9 +77,9 @@ def train(strategy, config):
   #####
   config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
   model_name_or_path = 'xlm-mlm-enfr-1024'
-  config_cache_dir = "models/xlm/config" 
-  model_cache_dir = "models/xlm/model"
-  tokenizer_cache_dir = "models/xlm/tokenizer"
+  config_cache_dir = os.path.join(config.get("model_dir"),"config")
+  model_cache_dir = os.path.join(config.get("model_dir"),"model")
+  tokenizer_cache_dir = os.path.join(config.get("model_dir"),"tokenizer")
   #####
   train_dataset = Dataset(config.get("filepath",None),  
               os.path.join(config.get("model_dir"),"data"),
