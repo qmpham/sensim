@@ -52,11 +52,13 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         tgt_inputs = inputs[1]
         src_transformer_outputs = self.transformer(src_inputs, **kwargs)
         tgt_transformer_outputs = self.transformer(tgt_inputs, **kwargs)
-        src_output = src_transformer_outputs[0]
-        tgt_output = tgt_transformer_outputs[0]
+        #src_output = src_transformer_outputs[0]
+        #tgt_output = tgt_transformer_outputs[0]
         #print(self.src_encoder(src_output, mask=src_padding_mask, training=training))
-        src, _, _, _, _ = self.src_encoder(src_output, mask=src_padding_mask, training=training)
-        tgt, _, _, _, _ = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training)       
+        #src, _, _, _, _ = self.src_encoder(src_output, mask=src_padding_mask, training=training)
+        #tgt, _, _, _, _ = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training) 
+        src = src_transformer_outputs
+        tgt = tgt_transformer_outputs
         src =tf.nn.dropout(src, 0.1)
         tgt =tf.nn.dropout(tgt, 0.1)
         self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
@@ -98,6 +100,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         return self.align, self.aggregation_src, self.aggregation_tgt, self.loss
 
     def encode(self, inputs, padding_mask, lang="en"):
+      """
       if lang == "en":
         transformer_outputs = self.transformer(inputs)
         output = transformer_outputs[0]
@@ -111,4 +114,6 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
       else:
         sys.stderr.write("error: bad language option '{}'\n".format("en, fr"))
         sys.exit(1)
+      """
+      return tf.reduce_mean(self.transformer(inputs),1)
     
