@@ -70,7 +70,7 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   D, I = index.search(tgt_sentences, k)     # tgt -> src search  
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
-def decode():
+def encode():
   return
 
 def train(strategy, config):
