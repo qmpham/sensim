@@ -5,6 +5,8 @@ import tensorflow as tf
 import sys
 from transformers.tokenization_xlm import XLMTokenizer
 import gzip
+import os
+from pathlib import Path
 
 def _get_output_shapes(dataset):
   """Returns the outputs shapes of the dataset.
@@ -391,12 +393,14 @@ def function_on_next(dataset, as_numpy=False):
 
 class Dataset() :
 
-  def __init__(self, 
+  def __init__(self,                             
               filepath,                
+              training_data_save_path,
               seq_size, 
               max_sents, 
               do_shuffle, 
               do_skip_empty,
+              procedure="training",
               model_name_or_path = 'xlm-mlm-enfr-1024',
               tokenizer_class = XLMTokenizer,
               tokenizer_cache_dir = "models/xlm/tokenizer"):
@@ -404,7 +408,8 @@ class Dataset() :
     if filepath is None:
       sys.stderr.write("error: give some filepath")
       sys.exit(1)
-
+    
+    Path(training_data_save_path).mkdir(parents=True, exist_ok=True)
     self.files = filepath.split(",")
     self.seq_size = seq_size
     self.max_sents = max_sents
@@ -415,18 +420,17 @@ class Dataset() :
     ### length of the data set to be used (not necessarily the whole set)
     self.length = 0
     self.tokenizer = tokenizer_class.from_pretrained(model_name_or_path, cache_dir=tokenizer_cache_dir if tokenizer_cache_dir else None)
-    assert len(self.files) == 3 or len(self.files) == 2
-    self.src = self.files[0]
-    self.tgt = self.files[1]
-    if len(self.files) == 3:
-      self.false_tgt = self.files[2]
+    assert len(self.files) == 3 or len(self.files) == 2    
+    self.false_tgt = os.path.join(training_data_save_path,"%s.tgt.false"%procedure)
+    self.src = os.path.join(training_data_save_path,"%s.src"%procedure)
+    self.tgt = os.path.join(training_data_save_path,"%s.tgt"%procedure)
 
   def get_tokenizer(self):
     return self.tokenizer
 
   def shuffle(self):
-    f_read_src = open(self.src,"r")
-    f_read_tgt = open(self.tgt,"r")
+    f_read_src = open(self.files[0],"r")
+    f_read_tgt = open(self.files[1],"r")
 
     line_read_src = [l.strip() for l in f_read_src]
     line_read_tgt = [l.strip() for l in f_read_tgt]
@@ -451,9 +455,38 @@ class Dataset() :
     f_write_src.close()
     f_write_tgt.close()
 
+  def copy(self):
+    f_read_src = open(self.files[0],"r")
+    f_read_tgt = open(self.files[1],"r")
+
+    line_read_src = [l.strip() for l in f_read_src]
+    line_read_tgt = [l.strip() for l in f_read_tgt]
+    self.dataset_size = len(line_read_src)
+
+    f_read_src.close()
+    f_read_tgt.close()
+
+    f_write_src = open(self.src,"w")
+    f_write_tgt = open(self.tgt,"w")   
+    f_write_false_tgt = open(self.false_tgt,"w")
+
+    inds = np.arange(self.dataset_size)
+    
+    for id in inds:
+      print(line_read_src[id], file=f_write_src)
+      print(line_read_tgt[id], file=f_write_tgt)
+      false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
+      print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
+
+    f_write_src.close()
+    f_write_tgt.close()
+
   def create_one_epoch(self, do_shuffle=True, mode="p"):
     if do_shuffle:
       self.shuffle()
+    else:
+      self.copy()
+
     process_fn = process_fn_(self.tokenizer)
     if mode =="p":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.tgt)))
@@ -465,7 +498,7 @@ class Dataset() :
                       batch_multiplier=1,
                       batch_size_multiple=1,
                       process_fn=process_fn,
-                      length_bucket_width=1,
+                      length_bucket_width=None,
                       features_length_fn = lambda src: tf.shape(src["input_ids"])[0],
                       labels_length_fn = lambda tgt: tf.shape(tgt["input_ids"])[0],
                       maximum_features_length=100,

@@ -4,7 +4,7 @@ from torch import nn
 from transformers import *
 from transformers import pipeline, glue_convert_examples_to_features
 from data_loader import training_pipeline, process_fn_, Dataset, function_on_next
-from model import TFXLMForSequenceEmbedding
+from model import TFXLMForSequenceEmbedding, TFXLMForSequenceClassification
 import argparse
 import logging
 import yaml
@@ -27,11 +27,13 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
     ckpt_path = checkpoint_manager.latest_checkpoint
   tf.get_logger().info("Evaluating model %s", ckpt_path)  
   checkpoint.restore(ckpt_path)
-  validation_dataset = Dataset(config.get("validation_file_path",None),                
+  validation_dataset = Dataset(config.get("validation_file_path",None),   
+              os.path.join(config.get("model_dir"),"data"),
               config.get("seq_size"), 
               config.get("max_sents"), 
               config.get("do_shuffle"), 
               config.get("do_skip_empty"),
+              procedure="dev",
               model_name_or_path = model_name_or_path,
               tokenizer_class = tokenizer_class,
               tokenizer_cache_dir = tokenizer_cache_dir)
@@ -57,6 +59,8 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
       break
   src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
   tgt_sentences = np.concatenate(tgt_sentence_embedding_list, axis=0)
+  print("src_sentences",src_sentences.shape)
+  print("tgt_sentences",tgt_sentences.shape)
   d = src_sentences.shape[-1]
   index = faiss.IndexFlatIP(d)   # build the index
   print("faiss state: ", index.is_trained)
@@ -66,25 +70,10 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   D, I = index.search(tgt_sentences, k)     # tgt -> src search  
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
-def main():
-  devices = tf.config.experimental.list_logical_devices(device_type="GPU")
-  print(devices)
-  strategy = tf.distribute.MirroredStrategy(devices=[d.name for d in devices])
-  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument("run", choices=["train", "debug", "encode" ], help="Run type.")
-  parser.add_argument("--config", required=True , help="configuration file")
-  parser.add_argument("--file")
-  parser.add_argument("--ckpt", default=None)
-  parser.add_argument("--output", default="sentembedding")
+def decode():
+  return
 
-  args = parser.parse_args()
-  print("Running mode: ", args.run)
-  config_file = args.config
-  with open(config_file, "r") as stream:
-      config = yaml.load(stream)
-  if not os.path.exists(os.path.join(config["model_dir"],"eval")):
-    os.makedirs(os.path.join(config["model_dir"],"eval"))
-
+def train(strategy, config):
   #####
   config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
   model_name_or_path = 'xlm-mlm-enfr-1024'
@@ -92,7 +81,8 @@ def main():
   model_cache_dir = "models/xlm/model"
   tokenizer_cache_dir = "models/xlm/tokenizer"
   #####
-  train_dataset = Dataset(config.get("filepath",None),                
+  train_dataset = Dataset(config.get("filepath",None),  
+              os.path.join(config.get("model_dir"),"data"),
               config.get("seq_size"), 
               config.get("max_sents"), 
               config.get("do_shuffle"), 
@@ -111,7 +101,7 @@ def main():
   tokenizer = train_dataset.get_tokenizer()
   ##### Optimizers
   learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",16))
-  optimizer = tfa.optimizers.LazyAdam(learning_rate)
+  optimizer = tfa.optimizers.LazyAdam(learning_rate, )
   checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
   checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
   #####
@@ -122,10 +112,12 @@ def main():
   def _accumulate_gradients(src, tgt, sign):
     src_padding_mask = build_mask(src["input_ids"],src["lengths"])
     tgt_padding_mask = build_mask(tgt["input_ids"],tgt["lengths"])
-    _, _, _, loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask)
+    align, aggregation_src, aggregation_tgt, loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=True)
+    #tf.print("aggregation_src", aggregation_src, "aggregation_tgt", aggregation_tgt, "sign", sign, summarize=1000)
     variables = model.trainable_variables
     print("var numb: ", len(variables))
     gradients = optimizer.get_gradients(loss, variables)
+    gradients = [(tf.clip_by_norm(grad, 0.1)) for grad in gradients]
     gradient_accumulator(gradients)
     num_examples = tf.shape(src["input_ids"])[0]
     return loss, num_examples
@@ -134,8 +126,7 @@ def main():
     variables = model.trainable_variables
     grads_and_vars = []
     for gradient, variable in zip(gradient_accumulator.gradients, variables):
-      # optimizer.apply_gradients will sum the gradients accross replicas.
-      scaled_gradient = gradient / (strategy.num_replicas_in_sync * tf.cast(gradient_accumulator.step, tf.float32))
+      scaled_gradient = gradient / 2.0
       grads_and_vars.append((scaled_gradient, variable))
     optimizer.apply_gradients(grads_and_vars)
     gradient_accumulator.reset()
@@ -187,12 +178,14 @@ def main():
   with _summary_writer.as_default():
     while True:    
         try:
-          p_loss, p_examples_num = next(u_training_flow)
-          u_loss, u_examples_num = next(p_training_flow)
-          _step()
+          u_loss, p_examples_num = next(u_training_flow)
+          p_loss, u_examples_num = next(p_training_flow)
+          _step()          
           p_losses.append(p_loss)
           u_losses.append(u_loss)
-          _number_examples.extend([p_examples_num, u_examples_num])
+          #print(p_losses)
+          #print(u_losses)
+          _number_examples.extend([u_examples_num, p_examples_num])
           step = optimizer.iterations.numpy()
           if step % report_every == 0:
             elapsed = time.time() - start
@@ -205,10 +198,10 @@ def main():
             _number_examples = []
           if step % save_every == 0:
             tf.get_logger().info("Saving checkpoint for step %d", step)
-            checkpoint_manager.save(checkpoint_number=step)
+            #checkpoint_manager.save(checkpoint_number=step)
           if step % eval_every == 0:
             ckpt_path = None
-            evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_name_or_path, tokenizer_class, tokenizer_cache_dir)
+            #evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_name_or_path, tokenizer_class, tokenizer_cache_dir)
           tf.summary.flush()
           if step > train_steps:
             break
@@ -221,7 +214,7 @@ def main():
             with strategy.scope():
               per_replica_source, per_replica_target = next_fn()
               per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
-                  _accumulate_gradients, args=(per_replica_source, per_replica_target))
+                  _accumulate_gradients, args=(per_replica_source, per_replica_target, 1.0))
               loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
               num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
             return loss, num_examples
@@ -231,13 +224,36 @@ def main():
             with strategy.scope():
               per_replica_source, per_replica_target = next_fn()
               per_replica_loss, per_replica_num_examples = strategy.experimental_run_v2(
-                  _accumulate_gradients, args=(per_replica_source, per_replica_target))
+                  _accumulate_gradients, args=(per_replica_source, per_replica_target, -1.0))
               loss = strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_loss, None)      
               num_examples = strategy.reduce(tf.distribute.ReduceOp.SUM, per_replica_num_examples, None)
             return loss, num_examples
           
           u_training_flow = iter(_u_train_forward())
           p_training_flow = iter(_p_train_forward())
+
+def main():
+
+  devices = tf.config.experimental.list_logical_devices(device_type="GPU")
+  print(devices)
+  strategy = tf.distribute.MirroredStrategy(devices=[d.name for d in devices])
+  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser.add_argument("run", choices=["train", "debug", "encode" ], help="Run type.")
+  parser.add_argument("--config", required=True , help="configuration file")
+  parser.add_argument("--file")
+  parser.add_argument("--ckpt", default=None)
+  parser.add_argument("--output", default="sentembedding")
+
+  args = parser.parse_args()
+  print("Running mode: ", args.run)
+  config_file = args.config
+  with open(config_file, "r") as stream:
+      config = yaml.load(stream)  
+
+  if args.run == "train":
+    train(strategy, config)
+  elif args.run == "encode":
+    encode() 
 
 if __name__ == "__main__":
   main()
