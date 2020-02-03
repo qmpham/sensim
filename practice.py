@@ -162,9 +162,9 @@ def train(strategy, config):
   #### Training  
 
   _summary_writer = tf.summary.create_file_writer(config["model_dir"])
-  report_every = config.get("report_every", 1)
-  save_every = config.get("save_every", 5)
-  eval_every = config.get("eval_every", 5)
+  report_every = config.get("report_every", 100)
+  save_every = config.get("save_every", 500)
+  eval_every = config.get("eval_every", 500)
   train_steps = config.get("train_steps", 100000)
 
   u_training_flow = iter(_u_train_forward())
