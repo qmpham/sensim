@@ -424,6 +424,7 @@ class Dataset() :
       line_read_tgt = [l.strip() for l in line_read_tgt]
 
     self.dataset_size = len(line_read_src)
+    print("Data size: ", self.dataset_size)
     inds = np.arange(self.dataset_size)
     from random import shuffle
     shuffle(inds)
@@ -449,15 +450,20 @@ class Dataset() :
       line_read_tgt = f.read()
       line_read_tgt = [l.strip() for l in line_read_tgt]
     self.dataset_size = len(line_read_src)
+    print("Data size: ", self.dataset_size)
     inds = np.arange(self.dataset_size)
     with open(self.src,"w") as f_write_src:
-      with open(self.tgt,"w") as f_write_tgt:
-        with open(self.false_tgt,"w") as f_write_false_tgt:
-          for id in inds:
-            print(line_read_src[id], file=f_write_src)
-            print(line_read_tgt[id], file=f_write_tgt)
-            false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
-            print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
+      for id in inds:
+        print(line_read_src[id], file=f_write_src)
+
+    with open(self.tgt,"w") as f_write_tgt:
+      for id in inds:
+        print(line_read_tgt[id], file=f_write_tgt)
+
+    with open(self.false_tgt,"w") as f_write_false_tgt:
+      for id in inds:
+        false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
+        print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
   def create_one_epoch(self, do_shuffle=True, mode="p"):
     print("Creating training data files")
