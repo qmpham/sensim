@@ -443,30 +443,21 @@ class Dataset() :
     f_write_tgt.close()
 
   def copy(self):
-    f_read_src = open(self.files[0],"r")
-    f_read_tgt = open(self.files[1],"r")
-
-    line_read_src = [l.strip() for l in f_read_src]
-    line_read_tgt = [l.strip() for l in f_read_tgt]
-    self.dataset_size = len(line_read_src)
-
-    f_read_src.close()
-    f_read_tgt.close()
-
-    f_write_src = open(self.src,"w")
-    f_write_tgt = open(self.tgt,"w")   
-    f_write_false_tgt = open(self.false_tgt,"w")
-
-    inds = np.arange(self.dataset_size)
     
-    for id in inds:
-      print(line_read_src[id], file=f_write_src)
-      print(line_read_tgt[id], file=f_write_tgt)
-      false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
-      print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
-
-    f_write_src.close()
-    f_write_tgt.close()
+    with open(self.files[0],"r") as f:
+      line_read_src = [l.strip() for l in f]
+    with open(self.files[1],"r") as f:
+      line_read_tgt = [l.strip() for l in f]
+    self.dataset_size = len(line_read_src)
+    inds = np.arange(self.dataset_size)
+    with open(self.src,"w") as f_write_src:
+      with open(self.tgt,"w") as f_write_tgt:
+        with open(self.false_tgt,"w") as f_write_false_tgt:
+          for id in inds:
+            print(line_read_src[id], file=f_write_src)
+            print(line_read_tgt[id], file=f_write_tgt)
+            false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
+            print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
   def create_one_epoch(self, do_shuffle=True, mode="p"):
     if do_shuffle:
