@@ -183,8 +183,7 @@ def train(strategy, config):
           _step()          
           p_losses.append(p_loss)
           u_losses.append(u_loss)
-          #print(p_losses)
-          #print(u_losses)
+          
           _number_examples.extend([u_examples_num, p_examples_num])
           step = optimizer.iterations.numpy()
           if step % report_every == 0:

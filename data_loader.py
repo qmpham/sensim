@@ -115,18 +115,7 @@ def random_shard(shard_size, dataset_size):
 
   return _random_shard
 
-def shuffle_dataset(buffer_size, shuffle_shards=True):
-  """Transformation that shuffles the dataset based on its size.
-
-  Args:
-    buffer_size: The number of elements from which to sample.
-    shuffle_shards: When :obj:`buffer_size` is smaller than the dataset size,
-      the dataset is first sharded in a random order to add another level of
-      shuffling.
-
-  Returns:
-    A ``tf.data.Dataset`` transformation.
-  """
+def shuffle_dataset(buffer_size, shuffle_shards=True):  
 
   def _shuffle(dataset):
     sample_size = buffer_size
@@ -294,14 +283,12 @@ def training_pipeline(batch_size,
                       num_shards=1,
                       shard_index=0,
                       num_threads=None,
-                      shuffle_buffer_size=None,
                       prefetch_buffer_size=None):
 
   def _pipeline(dataset):
     if num_shards > 1:
       dataset = dataset.shard(num_shards, shard_index)
-    if shuffle_buffer_size is not None and shuffle_buffer_size != 0:
-      dataset = dataset.apply(shuffle_dataset(shuffle_buffer_size))
+    
     if process_fn is not None:
       dataset = dataset.map(process_fn, num_parallel_calls=num_threads or 4)
     dataset = dataset.apply(filter_examples_by_length(
@@ -316,8 +303,8 @@ def training_pipeline(batch_size,
         batch_size_multiple=batch_size_multiple,
         length_bucket_width=length_bucket_width,
         length_fn=[features_length_fn, labels_length_fn]))
-    #if not single_pass:
-    #  dataset = dataset.repeat()
+    if not single_pass:
+      dataset = dataset.repeat()
     dataset = dataset.prefetch(prefetch_buffer_size)
     return dataset
 
@@ -403,7 +390,7 @@ class Dataset() :
               procedure="training",
               model_name_or_path = 'xlm-mlm-enfr-1024',
               tokenizer_class = XLMTokenizer,
-              tokenizer_cache_dir = "models/xlm/tokenizer"):
+              tokenizer_cache_dir = "tokenizer"):
 
     if filepath is None:
       sys.stderr.write("error: give some filepath")
@@ -507,7 +494,6 @@ class Dataset() :
                       num_shards=1,
                       shard_index=0,
                       num_threads=None,
-                      shuffle_buffer_size=None,
                       prefetch_buffer_size=200))
 
     return dataset
