@@ -98,16 +98,15 @@ def train(strategy, config):
       model_name_or_path,
       config=pretrained_config,
       cache_dir=model_cache_dir if model_cache_dir else None)  
-  tokenizer = train_dataset.get_tokenizer()
-  ##### Optimizers
-  learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",16))
-  optimizer = tfa.optimizers.LazyAdam(learning_rate, )
-  checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
-  checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
-  if checkpoint_manager.latest_checkpoint is not None:
-    tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
-    checkpoint.restore(checkpoint_manager.latest_checkpoint)
-    checkpoint_path = checkpoint_manager.latest_checkpoint
+    ##### Optimizers
+    learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",16))
+    optimizer = tfa.optimizers.LazyAdam(learning_rate, )
+    checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
+    checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
+    if checkpoint_manager.latest_checkpoint is not None:
+      tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
+      checkpoint.restore(checkpoint_manager.latest_checkpoint)
+      checkpoint_path = checkpoint_manager.latest_checkpoint
   #####
   ##### Training functions
   with strategy.scope():    
