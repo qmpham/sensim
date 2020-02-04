@@ -82,7 +82,7 @@ def train(strategy, config):
   tokenizer_cache_dir = os.path.join(config.get("model_dir"),"tokenizer")
   #####
   train_dataset = Dataset(config.get("filepath",None),  
-              os.path.join(config.get("model_dir"),"data"),
+              config.get("training_data_save_path"),
               config.get("seq_size"), 
               config.get("max_sents"), 
               config.get("do_shuffle"), 
