@@ -444,10 +444,10 @@ class Dataset() :
   def copy(self, mode="u"):
 
     with open(self.files[0],"r") as f:      
-      line_read_src = f.read() 
+      line_read_src = f.readlines() 
       line_read_src = [l.strip() for l in line_read_src]
     with open(self.files[1],"r") as f:
-      line_read_tgt = f.read()
+      line_read_tgt = f.readlines()
       line_read_tgt = [l.strip() for l in line_read_tgt]
     self.dataset_size = len(line_read_src)
     print("Data size: ", self.dataset_size)
