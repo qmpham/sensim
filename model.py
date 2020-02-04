@@ -78,8 +78,8 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
             sys.stderr.write("error: bad aggregation option '{}'\n".format(self.config.aggr))
             sys.exit(1)
          
-        self.output_src = self.aggregation_src * sign_src #tf.math.log(1 + tf.exp(self.aggregation_src * sign_src))
-        self.output_tgt = self.aggregation_tgt * sign_tgt #tf.math.log(1 + tf.exp(self.aggregation_tgt * sign_tgt))
+        self.output_src = tf.math.log(1 + tf.exp(self.aggregation_src * sign_src))
+        self.output_tgt = tf.math.log(1 + tf.exp(self.aggregation_tgt * sign_tgt))
         self.loss_src = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
                                                          (self.output_src, src_inputs["lengths"]), dtype=tf.float32))
         self.loss_tgt = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
