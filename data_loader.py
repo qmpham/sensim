@@ -422,7 +422,7 @@ class Dataset() :
     with open(self.files[1],"r") as f:
       line_read_tgt = f.read()
       line_read_tgt = [l.strip() for l in line_read_tgt]
-      
+
     self.dataset_size = len(line_read_src)
     inds = np.arange(self.dataset_size)
     from random import shuffle
@@ -441,11 +441,13 @@ class Dataset() :
         print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
   def copy(self):
-    
-    with open(self.files[0],"r") as f:
-      line_read_src = [l.strip() for l in f]
+
+    with open(self.files[0],"r") as f:      
+      line_read_src = f.read() 
+      line_read_src = [l.strip() for l in line_read_src]
     with open(self.files[1],"r") as f:
-      line_read_tgt = [l.strip() for l in f]
+      line_read_tgt = f.read()
+      line_read_tgt = [l.strip() for l in line_read_tgt]
     self.dataset_size = len(line_read_src)
     inds = np.arange(self.dataset_size)
     with open(self.src,"w") as f_write_src:
@@ -462,7 +464,7 @@ class Dataset() :
       self.shuffle()
     else:
       self.copy()
-
+    print("finished creating training data")
     process_fn = process_fn_(self.tokenizer)
     if mode =="p":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.tgt)))
@@ -471,6 +473,7 @@ class Dataset() :
     os.remove(self.src)
     os.remove(self.tgt)
     os.remove(self.false_tgt)
+    print("finish remove training data files")
     batch_size = self.max_sents
     dataset = dataset.apply(training_pipeline(batch_size,
                       batch_type="examples",
