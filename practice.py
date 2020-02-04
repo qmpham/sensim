@@ -121,7 +121,7 @@ def train(strategy, config):
     variables = model.trainable_variables
     print("var numb: ", len(variables))
     gradients = optimizer.get_gradients(loss, variables)
-    gradients = [(tf.clip_by_norm(grad, 0.1)) for grad in gradients]
+    #gradients = [(tf.clip_by_norm(grad, 0.1)) for grad in gradients]
     gradient_accumulator(gradients)
     num_examples = tf.shape(src["input_ids"])[0]
     return loss, num_examples
