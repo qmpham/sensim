@@ -479,7 +479,6 @@ class Dataset() :
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.tgt+".%s"%mode)))
     elif mode == "u":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.false_tgt+".%s"%mode)))
-    print("finish remove training data files")
     batch_size = self.max_sents
     dataset = dataset.apply(training_pipeline(batch_size,
                       batch_type="examples",

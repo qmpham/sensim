@@ -50,15 +50,15 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         src = tf.nn.dropout(src, 0.1)
         tgt = tf.nn.dropout(tgt, 0.1)
         print(sign_src, sign_tgt)
-        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
+        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.001
             
         R = 1.0
         if self.config["aggr"] == "lse":
             self.aggregation_src = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                (tf.exp(tf.transpose(self.align, [0, 2, 1]) * 0.001), tgt_inputs["lengths"]),
+                                                (tf.exp(tf.transpose(self.align, [0, 2, 1])), tgt_inputs["lengths"]),
                                                 dtype=tf.float32)), R, name="aggregation_src")
             self.aggregation_tgt = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                    (tf.exp(self.align * 0.001), src_inputs["lengths"]), dtype=tf.float32)),
+                                                    (tf.exp(self.align), src_inputs["lengths"]), dtype=tf.float32)),
                                                 R, name="aggregation_tgt")
         elif self.config["aggr"] == "sum":
             self.aggregation_src = tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
@@ -90,7 +90,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
 
     def encode(self, inputs, padding_mask, lang="en"):
       output = self.transformer(inputs, training=False)[0]
-      return tf.reduce_mean(output, 1)
+      return tf.map_fn(lambda xl: tf.reduce_mean(xl[0][:xl[1]],0), (output, inputs["lengths"]), dtype=tf.float32)
 
 class TFXLMForSequenceEmbedding_LSTM(TFXLMPreTrainedModel):
     def __init__(self, config, *inputs, **kwargs):
