@@ -416,10 +416,13 @@ class Dataset() :
     return self.tokenizer
 
   def shuffle(self):
-    with open(self.files[0],"r") as f:
-      line_read_src = [l.strip() for l in f]
+    with open(self.files[0],"r") as f:      
+      line_read_src = f.read() 
+      line_read_src = [l.strip() for l in line_read_src]
     with open(self.files[1],"r") as f:
-      line_read_tgt = [l.strip() for l in f]
+      line_read_tgt = f.read()
+      line_read_tgt = [l.strip() for l in line_read_tgt]
+      
     self.dataset_size = len(line_read_src)
     inds = np.arange(self.dataset_size)
     from random import shuffle
