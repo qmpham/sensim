@@ -460,11 +460,12 @@ class Dataset() :
             print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
   def create_one_epoch(self, do_shuffle=True, mode="p"):
+    print("Creating training data files")
     if do_shuffle:
       self.shuffle()
     else:
       self.copy()
-    print("finished creating training data")
+    print("finished creating training data files")
     process_fn = process_fn_(self.tokenizer)
     if mode =="p":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.tgt)))
