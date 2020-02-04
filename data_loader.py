@@ -415,7 +415,7 @@ class Dataset() :
   def get_tokenizer(self):
     return self.tokenizer
 
-  def shuffle(self):
+  def shuffle(self, mode="u"):
     with open(self.files[0],"r") as f:      
       line_read_src = f.readlines() 
       line_read_src = [l.strip() for l in line_read_src]
@@ -428,20 +428,20 @@ class Dataset() :
     inds = np.arange(self.dataset_size)
     from random import shuffle
     shuffle(inds)
-    with open(self.src,"w") as f_write_src:
+    with open(self.src+".%s"%mode,"w") as f_write_src:
       for id in inds:
         print(line_read_src[id], file=f_write_src)
 
-    with open(self.tgt,"w") as f_write_tgt:
+    with open(self.tgt+".%s"%mode,"w") as f_write_tgt:
       for id in inds:
         print(line_read_tgt[id], file=f_write_tgt)
 
-    with open(self.false_tgt,"w") as f_write_false_tgt:
+    with open(self.false_tgt+".%s"%mode,"w") as f_write_false_tgt:
       for id in inds:
         false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
         print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
-  def copy(self):
+  def copy(self, mode="u"):
 
     with open(self.files[0],"r") as f:      
       line_read_src = f.read() 
@@ -452,15 +452,15 @@ class Dataset() :
     self.dataset_size = len(line_read_src)
     print("Data size: ", self.dataset_size)
     inds = np.arange(self.dataset_size)
-    with open(self.src,"w") as f_write_src:
+    with open(self.src+".%s"%mode,"w") as f_write_src:
       for id in inds:
         print(line_read_src[id], file=f_write_src)
 
-    with open(self.tgt,"w") as f_write_tgt:
+    with open(self.tgt+".%s"%mode,"w") as f_write_tgt:
       for id in inds:
         print(line_read_tgt[id], file=f_write_tgt)
 
-    with open(self.false_tgt,"w") as f_write_false_tgt:
+    with open(self.false_tgt+".%s"%mode,"w") as f_write_false_tgt:
       for id in inds:
         false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
         print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
@@ -468,15 +468,15 @@ class Dataset() :
   def create_one_epoch(self, do_shuffle=True, mode="p"):
     print("Creating training data files")
     if do_shuffle:
-      self.shuffle()
+      self.shuffle(mode=mode)
     else:
-      self.copy()
+      self.copy(mode=mode)
     print("finished creating training data files")
     process_fn = process_fn_(self.tokenizer)
     if mode =="p":
-      dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.tgt)))
+      dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.tgt+".%s"%mode)))
     elif mode == "u":
-      dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src),tf.data.TextLineDataset(self.false_tgt)))
+      dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.false_tgt+".%s"%mode)))
     print("finish remove training data files")
     batch_size = self.max_sents
     dataset = dataset.apply(training_pipeline(batch_size,
