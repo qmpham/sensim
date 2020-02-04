@@ -33,7 +33,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         super().__init__(config, *inputs, **kwargs)
         self.num_labels = config.num_labels
         self.transformer = TFXLMMainLayer(config, name='transformer')
-        self.config = {"aggr":"sum"}
+        self.config = {"aggr":"lse"}
 
     @property
     def dummy_inputs(self):
@@ -55,10 +55,10 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         R = 1.0
         if self.config["aggr"] == "lse":
             self.aggregation_src = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                (tf.exp(tf.transpose(self.align, [0, 2, 1]) * R), tgt_inputs["lengths"]),
+                                                (tf.exp(tf.transpose(self.align, [0, 2, 1]) * 0.01), tgt_inputs["lengths"]),
                                                 dtype=tf.float32)), R, name="aggregation_src")
             self.aggregation_tgt = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                    (tf.exp(self.align * R), src_inputs["lengths"]), dtype=tf.float32)),
+                                                    (tf.exp(self.align * 0.01), src_inputs["lengths"]), dtype=tf.float32)),
                                                 R, name="aggregation_tgt")
         elif self.config["aggr"] == "sum":
             self.aggregation_src = tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),

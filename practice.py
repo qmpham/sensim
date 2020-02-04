@@ -104,6 +104,10 @@ def train(strategy, config):
   optimizer = tfa.optimizers.LazyAdam(learning_rate, )
   checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
   checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
+  if checkpoint_manager.latest_checkpoint is not None:
+    tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
+    checkpoint.restore(checkpoint_manager.latest_checkpoint)
+    checkpoint_path = checkpoint_manager.latest_checkpoint
   #####
   ##### Training functions
   with strategy.scope():    
@@ -163,8 +167,8 @@ def train(strategy, config):
 
   _summary_writer = tf.summary.create_file_writer(config["model_dir"])
   report_every = config.get("report_every", 100)
-  save_every = config.get("save_every", 500)
-  eval_every = config.get("eval_every", 500)
+  save_every = config.get("save_every", 1000)
+  eval_every = config.get("eval_every", 1000)
   train_steps = config.get("train_steps", 100000)
 
   u_training_flow = iter(_u_train_forward())
@@ -178,8 +182,8 @@ def train(strategy, config):
   with _summary_writer.as_default():
     while True:    
         try:
-          u_loss, p_examples_num = next(u_training_flow)
-          p_loss, u_examples_num = next(p_training_flow)
+          u_loss, u_examples_num = next(u_training_flow)
+          p_loss, p_examples_num = next(p_training_flow)
           _step()          
           p_losses.append(p_loss)
           u_losses.append(u_loss)
@@ -197,10 +201,10 @@ def train(strategy, config):
             _number_examples = []
           if step % save_every == 0:
             tf.get_logger().info("Saving checkpoint for step %d", step)
-            #checkpoint_manager.save(checkpoint_number=step)
+            checkpoint_manager.save(checkpoint_number=step)
           if step % eval_every == 0:
             ckpt_path = None
-            #evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_name_or_path, tokenizer_class, tokenizer_cache_dir)
+            evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_name_or_path, tokenizer_class, tokenizer_cache_dir)
           tf.summary.flush()
           if step > train_steps:
             break
