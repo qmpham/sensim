@@ -33,7 +33,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         super().__init__(config, *inputs, **kwargs)
         self.num_labels = config.num_labels
         self.transformer = TFXLMMainLayer(config, name='transformer')
-        self.config = {"aggr":"lse"}
+        self.config = {"aggr":"sum"}
 
     @property
     def dummy_inputs(self):
@@ -49,7 +49,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         tgt = tgt_transformer_outputs[0]
         src = tf.nn.dropout(src, 0.1)
         tgt = tf.nn.dropout(tgt, 0.1)
-        
+        print(sign_src, sign_tgt)
         self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
             
         R = 1.0
