@@ -50,7 +50,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         src = tf.nn.dropout(src, 0.1)
         tgt = tf.nn.dropout(tgt, 0.1)
         print(sign_src, sign_tgt)
-        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.01
+        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.1
             
         R = 1.0
         if self.config["aggr"] == "lse":
