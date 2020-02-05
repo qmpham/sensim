@@ -163,7 +163,7 @@ def train(strategy, config):
       strategy.experimental_run_v2(_apply_gradients)
 
   #### Training  
- 
+
   _summary_writer = tf.summary.create_file_writer(config["model_dir"])
   report_every = config.get("report_every", 100)
   save_every = config.get("save_every", 1000)
