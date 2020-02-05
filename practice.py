@@ -100,7 +100,7 @@ def train(strategy, config):
       cache_dir=model_cache_dir if model_cache_dir else None)  
     ##### Optimizers
     learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",16))
-    optimizer = tfa.optimizers.LazyAdam(0.01)
+    optimizer = tfa.optimizers.LazyAdam(learning_rate)
     checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
     checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
     if checkpoint_manager.latest_checkpoint is not None:
