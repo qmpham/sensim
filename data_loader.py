@@ -514,6 +514,7 @@ class Dataset() :
     elif mode == "u":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.false_tgt+".%s"%mode)))
     elif mode =="e":
+      print("file: ",self.src+".%s"%mode)
       dataset = tf.data.TextLineDataset(self.src+".%s"%mode)
       dataset = dataset.map(lambda x: (x,lang))
     batch_size = self.max_sents
