@@ -29,7 +29,7 @@ print("faiss state: ", index.is_trained)
 index.add(v_db)       # add vectors to the index
 print("number of sentences in database: %d"%index.ntotal)
 print("number of sentences in query: %d"%v_query.shape[0])
-k = 1
+k = 5
 D, I = index.search(v_query, k)     # tgt -> src search  
  
 for i in range(len(I)):
@@ -39,4 +39,4 @@ for i in range(len(I)):
         print("\t - ",database_lines[I[i][j]])
         print("\t - at distance %f"%D[i][j])
 
-print(accuracy_score(np.arange(index.ntotal), I))
+print(accuracy_score(np.arange(index.ntotal), I[:,0]))
