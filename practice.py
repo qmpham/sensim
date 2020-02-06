@@ -76,7 +76,7 @@ def encode():
 def train(strategy, config):
   #####
   config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
-  model_name_or_path = 'xlm-mlm-enfr-1024'
+  model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
   model_cache_dir = config.get("pretrained_model_cache_dir")
   tokenizer_cache_dir = config.get("pretrained_tokenizer_cache_dir")
