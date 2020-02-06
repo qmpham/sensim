@@ -279,8 +279,7 @@ def main():
   parser.add_argument("--file")
   parser.add_argument("--ckpt", default=None)
   parser.add_argument("--output", default="sentembedding")
-  parser.add_argument("--encode_path", default=None)
-
+  parser.add_argument("--encode_path")
   args = parser.parse_args()
   print("Running mode: ", args.run)
   config_file = args.config
