@@ -4,7 +4,7 @@ from torch import nn
 from transformers import *
 from transformers import pipeline, glue_convert_examples_to_features
 from data_loader import training_pipeline, process_fn_, Dataset, function_on_next
-from model import TFXLMForSequenceEmbedding, TFXLMForSequenceClassification
+from model import TFXLMForSequenceEmbedding, TFXLMForSequenceEmbedding_LSTM
 import argparse
 import logging
 import yaml
@@ -70,12 +70,41 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   D, I = index.search(tgt_sentences, k)     # tgt -> src search  
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
-def encode():
+def encode(dataset_path, config, config_class, model_class, tokenizer_class):
+  #####  
+  model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
+  config_cache_dir = config.get("pretrained_config_cache_dir")
+  model_cache_dir = config.get("pretrained_model_cache_dir")
+  tokenizer_cache_dir = config.get("pretrained_tokenizer_cache_dir")
+  model_name_or_path_ = config.get("model_name_or_path_","xlm-mlm-enfr-1024")
+  #####
+  dataset = Dataset(dataset_path,  
+              config.get("training_data_save_path"),
+              config.get("seq_size"), 
+              config.get("max_sents"), 
+              config.get("do_shuffle"), 
+              config.get("do_skip_empty"),
+              model_name_or_path = model_name_or_path,
+              tokenizer_class = tokenizer_class,
+              tokenizer_cache_dir = tokenizer_cache_dir)
+  pretrained_config = config_class.from_pretrained(
+      model_name_or_path,    
+      cache_dir=config_cache_dir if config_cache_dir else None)
+  model = model_class.from_pretrained(
+      model_name_or_path_,
+      config=pretrained_config,
+      cache_dir=model_cache_dir if model_cache_dir else None)
+  checkpoint = tf.train.Checkpoint(model=model)     
+  checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
+  if checkpoint_manager.latest_checkpoint is not None:
+    tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
+    checkpoint_path = checkpoint_manager.latest_checkpoint
+    checkpoint.restore(checkpoint_path)
+  
   return
 
-def train(strategy, config):
-  #####
-  config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
+def train(strategy, config, config_class, model_class, tokenizer_class):
+  #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
   model_cache_dir = config.get("pretrained_model_cache_dir")
@@ -236,7 +265,11 @@ def train(strategy, config):
           p_training_flow = iter(_p_train_forward())
 
 def main():
-
+  #### list of pretrained models
+  config_class_dict = {"xlm": XLMConfig}
+  model_class_dict = {"xlm": TFXLMForSequenceEmbedding, "xlm_lstm": TFXLMForSequenceEmbedding_LSTM}
+  tokenizer_class_dict = {"xlm": XLMTokenizer}
+  #### preparing devices, configs
   devices = tf.config.experimental.list_logical_devices(device_type="GPU")
   print(devices)
   strategy = tf.distribute.MirroredStrategy(devices=[d.name for d in devices])
@@ -246,17 +279,30 @@ def main():
   parser.add_argument("--file")
   parser.add_argument("--ckpt", default=None)
   parser.add_argument("--output", default="sentembedding")
+  parser.add_argument("--encode", default=None)
 
   args = parser.parse_args()
   print("Running mode: ", args.run)
   config_file = args.config
   with open(config_file, "r") as stream:
       config = yaml.load(stream)  
-
+  
   if args.run == "train":
-    train(strategy, config)
+    config_class_name = config.get("config_class_name","xlm")
+    model_class_name = config.get("model_class_name","xlm")
+    tokenizer_class_name = config.get("tokenizer_class_name","xlm")
+    config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
+    train(strategy, config, config_class, model_class, tokenizer_class)
   elif args.run == "encode":
-    encode() 
+    encode_config_file = args.encode
+    with open(encode_config_file, "r") as stream:
+      encode_config = yaml.load(stream)
+    config_class_name = config.get("config_class_name","xlm")
+    model_class_name = config.get("model_class_name","xlm")
+    tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
+    dataset_path = encode_config.get("dataset_path")
+    config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
+    encode(dataset_path, config, config_class, model_class, tokenizer_class) 
 
 if __name__ == "__main__":
   main()

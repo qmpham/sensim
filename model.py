@@ -100,22 +100,23 @@ class TFXLMForSequenceEmbedding_LSTM(TFXLMPreTrainedModel):
         tgt_inputs = inputs[1]
         src_transformer_outputs = self.transformer(src_inputs, training=training)
         tgt_transformer_outputs = self.transformer(tgt_inputs, training=training)
-        src_output = src_transformer_outputs[0]
-        tgt_output = tgt_transformer_outputs[0]
+        src_output = tf.stop_gradient(src_transformer_outputs[0])
+        tgt_output = tf.stop_gradient(tgt_transformer_outputs[0])
         src, _, _, _, _ = self.src_encoder(src_output, mask=src_padding_mask, training=training)
         tgt, _, _, _, _ = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training) 
         src = tf.nn.dropout(src, 0.1)
         tgt = tf.nn.dropout(tgt, 0.1)
         
-        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align")  
+        print(sign_src, sign_tgt)
+        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.01
             
         R = 1.0
         if self.config["aggr"] == "lse":
             self.aggregation_src = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                (tf.exp(tf.transpose(self.align, [0, 2, 1]) * R), tgt_inputs["lengths"]),
+                                                (tf.exp(tf.transpose(self.align, [0, 2, 1])), tgt_inputs["lengths"]),
                                                 dtype=tf.float32)), R, name="aggregation_src")
             self.aggregation_tgt = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
-                                                    (tf.exp(self.align * R), src_inputs["lengths"]), dtype=tf.float32)),
+                                                    (tf.exp(self.align), src_inputs["lengths"]), dtype=tf.float32)),
                                                 R, name="aggregation_tgt")
         elif self.config["aggr"] == "sum":
             self.aggregation_src = tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
