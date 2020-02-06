@@ -283,6 +283,7 @@ def main():
   args = parser.parse_args()
   print("Running mode: ", args.run)
   config_file = args.config
+  print("config_file: ",config_file)
   with open(config_file, "r") as stream:
       config = yaml.load(stream)  
   
@@ -294,7 +295,7 @@ def main():
     train(strategy, config, config_class, model_class, tokenizer_class)
   elif args.run == "encode":
     encode_config_file = args.encode_path
-    print("loading %s"%encode_config_file)
+    print("encode_config_file: %s"%encode_config_file)
     with open(encode_config_file, "r") as stream:
       encode_config = yaml.load(stream)
     config_class_name = config.get("config_class_name","xlm")
