@@ -77,9 +77,9 @@ def train(strategy, config):
   #####
   config_class, model_class, tokenizer_class = (XLMConfig, TFXLMForSequenceEmbedding, XLMTokenizer)
   model_name_or_path = 'xlm-mlm-enfr-1024'
-  config_cache_dir = os.path.join(config.get("model_dir"),"config")
-  model_cache_dir = os.path.join(config.get("model_dir"),"model")
-  tokenizer_cache_dir = os.path.join(config.get("model_dir"),"tokenizer")
+  config_cache_dir = config.get("pretrained_config_cache_dir")
+  model_cache_dir = config.get("pretrained_model_cache_dir")
+  tokenizer_cache_dir = config.get("pretrained_tokenizer_cache_dir")
   #####
   train_dataset = Dataset(config.get("filepath",None),  
               config.get("training_data_save_path"),
@@ -105,8 +105,8 @@ def train(strategy, config):
     checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
     if checkpoint_manager.latest_checkpoint is not None:
       tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
-      checkpoint.restore(checkpoint_manager.latest_checkpoint)
       checkpoint_path = checkpoint_manager.latest_checkpoint
+      checkpoint.restore(checkpoint_path)
   #####
   ##### Training functions
   with strategy.scope():    
