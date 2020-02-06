@@ -321,7 +321,7 @@ def main():
     tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
     dataset_path = encode_config.get("dataset_path")
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    encode(args.lang, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
+    encode(int(args.lang), dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
 
 if __name__ == "__main__":
   main()
