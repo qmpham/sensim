@@ -131,22 +131,15 @@ def shuffle_dataset(buffer_size, shuffle_shards=True):
 
   return _shuffle
 
-def batch_dataset(batch_size, padded_shapes=None):
-  """Transformation that batches a dataset.
-
-  Args:
-    batch_size: The batch size.
-    padded_shapes: The padded shapes for this dataset. If ``None``, the shapes
-      are automatically inferred from the dataset output shapes.
-
-  Returns:
-    A ``tf.data.Dataset`` transformation.
-
-  See Also:
-    :func:`opennmt.data.batch_sequence_dataset`
-  """
+def training_batch_dataset(batch_size, padded_shapes=None):
+  
   return lambda dataset: dataset.padded_batch(
       batch_size, padding_values=({"input_ids":2,"langs":0,"lengths":0},{"input_ids":2,"langs":1,"lengths":0}), padded_shapes=padded_shapes or _get_output_shapes(dataset))
+
+def inference_batch_dataset(batch_size, padded_shapes=None):
+  
+  return lambda dataset: dataset.padded_batch(
+      batch_size, padding_values={"input_ids":2,"langs":0,"lengths":0}, padded_shapes=padded_shapes or _get_output_shapes(dataset))
 
 def batch_sequence_dataset(batch_size,
                            batch_type="examples",
@@ -155,46 +148,7 @@ def batch_sequence_dataset(batch_size,
                            length_bucket_width=None,
                            length_fn=None,
                            padded_shapes=None):
-  """Transformation that batches a dataset of sequences.
 
-  This implements an example-based and a token-based batching strategy
-  with optional bucketing of sequences.
-
-  Bucketing makes the batches contain sequences of similar lengths to optimize
-  the training efficiency. For example, if :obj:`length_bucket_width` is 5,
-  sequences will be organized by the following buckets:
-
-  1 - 5 | 6 - 10 | 11 - 15 | ...
-
-  Then when building the next batch, sequences will be selected from the same
-  bucket.
-
-  If the dataset has parallel elements (e.g. a parallel source and target
-  dataset), the element is assigned to the bucket corresponding to the maximum
-  length of all parallel elements.
-
-  Args:
-    batch_size: The batch size.
-    batch_type: The training batching strategy to use: can be "examples" or
-      "tokens".
-    batch_multiplier: The batch size multiplier.
-    batch_size_multiple: When :obj:`batch_type` is "tokens", ensure that the
-      resulting batch size is a multiple of this value.
-    length_bucket_width: The sequence length bucket width.
-    length_fn: A function or list of functions (in case of a parallel dataset)
-      that take features as argument and return the associated sequence length.
-    padded_shapes: The padded shapes for this dataset. If ``None``, the shapes
-      are automatically inferred from the dataset output shapes.
-
-  Returns:
-    A ``tf.data.Dataset`` transformation.
-
-  Raises:
-    ValueError: if :obj:`batch_type` is not one of "examples" or "tokens".
-
-  See Also:
-    :func:`opennmt.data.batch_dataset`
-  """
   batch_size = batch_size * batch_multiplier
 
   def _get_bucket_id(features, length_fn):
@@ -225,7 +179,7 @@ def batch_sequence_dataset(batch_size,
     return tf.cast(bucket_id, tf.int64)
 
   def _reduce_func(unused_key, dataset):
-    return dataset.apply(batch_dataset(batch_size, padded_shapes=padded_shapes))
+    return dataset.apply(training_batch_dataset(batch_size, padded_shapes=padded_shapes))
 
   def _window_size_func(key):
     if length_bucket_width > 1:
@@ -237,7 +191,7 @@ def batch_sequence_dataset(batch_size,
     return tf.cast(tf.maximum(size, required_multiple), tf.int64)
 
   if length_bucket_width is None:
-    return batch_dataset(batch_size, padded_shapes=padded_shapes)
+    return training_batch_dataset(batch_size, padded_shapes=padded_shapes)
 
   if batch_type == "examples":
     return tf.data.experimental.group_by_window(
@@ -338,7 +292,7 @@ def inference_pipeline(batch_size,
 
   def _pipeline(dataset):
     dataset = dataset.map(process_fn, num_parallel_calls=num_threads)
-    dataset = dataset.apply(batch_dataset(batch_size))
+    dataset = dataset.apply(inference_batch_dataset(batch_size))
     dataset = dataset.prefetch(prefetch_buffer_size)
     return dataset
 
