@@ -274,12 +274,12 @@ def main():
   print(devices)
   strategy = tf.distribute.MirroredStrategy(devices=[d.name for d in devices])
   parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  parser.add_argument("run", choices=["train", "debug", "encode" ], help="Run type.")
+  parser.add_argument("run", choices=["train", "encode" ], help="Run type.")
   parser.add_argument("--config", required=True , help="configuration file")
   parser.add_argument("--file")
   parser.add_argument("--ckpt", default=None)
   parser.add_argument("--output", default="sentembedding")
-  parser.add_argument("--encode", default=None)
+  parser.add_argument("--encode_path", default=None)
 
   args = parser.parse_args()
   print("Running mode: ", args.run)
@@ -294,7 +294,7 @@ def main():
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
     train(strategy, config, config_class, model_class, tokenizer_class)
   elif args.run == "encode":
-    encode_config_file = args.encode
+    encode_config_file = args.encode_path
     print("loading %s"%encode_config_file)
     with open(encode_config_file, "r") as stream:
       encode_config = yaml.load(stream)
