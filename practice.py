@@ -70,7 +70,7 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   D, I = index.search(tgt_sentences, k)     # tgt -> src search  
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
-def encode(lang, dataset_path, config, config_class, model_class, tokenizer_class):
+def encode(lang, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -117,7 +117,7 @@ def encode(lang, dataset_path, config, config_class, model_class, tokenizer_clas
     except tf.errors.OutOfRangeError:
       break
   src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
-  np.savez(dataset_path+".output.npz","sentence_embeddings"=src_sentences)
+  np.savez(output,sentence_embeddings=src_sentences)
   return True
 
 def train(strategy, config, config_class, model_class, tokenizer_class):
@@ -297,6 +297,7 @@ def main():
   parser.add_argument("--ckpt", default=None)
   parser.add_argument("--output", default="sentembedding")
   parser.add_argument("--encode_path")
+  parser.add_argument("--output")
   args = parser.parse_args()
   print("Running mode: ", args.run)
   config_file = args.config
@@ -320,7 +321,7 @@ def main():
     tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
     dataset_path = encode_config.get("dataset_path")
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    encode(dataset_path, config, config_class, model_class, tokenizer_class) 
+    encode(dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
 
 if __name__ == "__main__":
   main()
