@@ -70,7 +70,7 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   D, I = index.search(tgt_sentences, k)     # tgt -> src search  
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
-def encode(dataset_path, config, config_class, model_class, tokenizer_class):
+def encode(lang, dataset_path, config, config_class, model_class, tokenizer_class):
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -84,6 +84,7 @@ def encode(dataset_path, config, config_class, model_class, tokenizer_class):
               config.get("max_sents"), 
               config.get("do_shuffle"), 
               config.get("do_skip_empty"),
+              procedure="encode",
               model_name_or_path = model_name_or_path,
               tokenizer_class = tokenizer_class,
               tokenizer_cache_dir = tokenizer_cache_dir)
@@ -100,8 +101,24 @@ def encode(dataset_path, config, config_class, model_class, tokenizer_class):
     tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
     checkpoint_path = checkpoint_manager.latest_checkpoint
     checkpoint.restore(checkpoint_path)
-  
-  return
+  iterator = iter(dataset.create_one_epoch(mode="e", lang=lang)) 
+
+  @tf.function
+  def encode_next():    
+    src = next(iterator)
+    padding_mask = build_mask(src["input_ids"], src["lengths"])
+    src_sentence_embedding = model.encode(src, padding_mask)    
+    return src_sentence_embedding
+  src_sentence_embedding_list = []  
+  while True:    
+    try:
+      src_sentence_embedding_ = encode_next()
+      src_sentence_embedding_list.append(src_sentence_embedding_.numpy())
+    except tf.errors.OutOfRangeError:
+      break
+  src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
+  np.savez(dataset_path+".output.npz","sentence_embeddings"=src_sentences)
+  return True
 
 def train(strategy, config, config_class, model_class, tokenizer_class):
   #####  

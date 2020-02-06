@@ -249,9 +249,9 @@ def batch_sequence_dataset(batch_size,
     raise ValueError(
         "Invalid batch type: '{}'; should be 'examples' or 'tokens'".format(batch_type))
 
-def process_fn_(tokenizer):
+def training_process_fn_(tokenizer):
   @tf.autograph.experimental.do_not_convert
-  def _tokenize_tensor(text, lang="en"):    
+  def _tokenize_tensor(text, lang=0):    #0: english, 1: french
     def _python_wrapper(string_t):
       string = tf.compat.as_text(string_t.numpy())      
       tokens = tokenizer.encode(string,add_special_tokens=True)
@@ -267,6 +267,25 @@ def process_fn_(tokenizer):
     tgt_ids, langs_tgt = _tokenize_tensor(tgt, lang=1)
     return ({"input_ids": src_ids, "langs": langs_src, "lengths": tf.shape(src_ids)[0]},
             {"input_ids": tgt_ids, "langs": langs_tgt, "lengths": tf.shape(tgt_ids)[0]})
+  return process_fn
+
+def inference_process_fn_(tokenizer):
+  @tf.autograph.experimental.do_not_convert
+  def _tokenize_tensor(text, lang=0):    
+    def _python_wrapper(string_t):
+      string = tf.compat.as_text(string_t.numpy())      
+      tokens = tokenizer.encode(string,add_special_tokens=True)
+      langs = [lang] * len(tokens)
+      return tf.constant(tokens), tf.constant(langs)
+    tokens, langs = tf.py_function(_python_wrapper, [text], (tf.int32, tf.int32))
+    tokens.set_shape([None])
+    langs.set_shape([None])
+    return tokens, langs
+
+  def process_fn(src,lang):
+    ids, langs = _tokenize_tensor(src, lang=lang)
+    return {"input_ids": ids, "langs": langs, "lengths": tf.shape(ids)[0]}
+
   return process_fn
 
 def training_pipeline(batch_size,
@@ -406,8 +425,7 @@ class Dataset() :
     self.data = []
     ### length of the data set to be used (not necessarily the whole set)
     self.length = 0
-    self.tokenizer = tokenizer_class.from_pretrained(model_name_or_path, cache_dir=tokenizer_cache_dir if tokenizer_cache_dir else None)
-    assert len(self.files) == 3 or len(self.files) == 2    
+    self.tokenizer = tokenizer_class.from_pretrained(model_name_or_path, cache_dir=tokenizer_cache_dir if tokenizer_cache_dir else None)        
     self.false_tgt = os.path.join(training_data_save_path,"%s.tgt.false"%procedure)
     self.src = os.path.join(training_data_save_path,"%s.src"%procedure)
     self.tgt = os.path.join(training_data_save_path,"%s.tgt"%procedure)
@@ -467,20 +485,25 @@ class Dataset() :
           false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
           print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
-  def create_one_epoch(self, do_shuffle=True, mode="p"):
+  def create_one_epoch(self, do_shuffle=True, mode="p", lang=0):
     print("Creating training data files")
     if do_shuffle:
       self.shuffle(mode=mode)
     else:
       self.copy(mode=mode)
     print("finished creating training data files")
-    process_fn = process_fn_(self.tokenizer)
+    
     if mode =="p":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.tgt+".%s"%mode)))
     elif mode == "u":
       dataset = tf.data.Dataset.zip((tf.data.TextLineDataset(self.src+".%s"%mode),tf.data.TextLineDataset(self.false_tgt+".%s"%mode)))
+    elif mode =="e":
+      dataset = tf.data.TextLineDataset(self.src+".%s"%mode)
+      dataset = dataset.map(lambda x: (x,lang))
     batch_size = self.max_sents
-    dataset = dataset.apply(training_pipeline(batch_size,
+    if mode in ["p","u"]:
+      process_fn = training_process_fn_(self.tokenizer)
+      dataset = dataset.apply(training_pipeline(batch_size,
                       batch_type="examples",
                       batch_multiplier=1,
                       batch_size_multiple=1,
@@ -495,5 +518,13 @@ class Dataset() :
                       shard_index=0,
                       num_threads=None,
                       prefetch_buffer_size=200))
+    elif mode=="e":
+      process_fn = inference_process_fn_(self.tokenizer)
+      dataset = dataset.apply(inference_pipeline(batch_size,
+                       process_fn=process_fn,
+                       length_bucket_width=None,
+                       length_fn=None,
+                       num_threads=None,
+                       prefetch_buffer_size=None))
 
     return dataset
