@@ -37,5 +37,5 @@ for i in range(len(I)):
     print("sentence: %s"%query_lines[i])
     print("%d neighbors: "%k)
     for j in range(k):
-        print(database_lines[I[i][j]])
-        print("at distance %f"%D[i][j])
+        print("\t - ",database_lines[I[i][j]])
+        print("\t - at distance %f"%D[i][j])
