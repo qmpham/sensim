@@ -80,6 +80,7 @@ def train(strategy, config):
   config_cache_dir = config.get("pretrained_config_cache_dir")
   model_cache_dir = config.get("pretrained_model_cache_dir")
   tokenizer_cache_dir = config.get("pretrained_tokenizer_cache_dir")
+  model_name_or_path_ = config.get("model_name_or_path_","xlm-mlm-enfr-1024")
   #####
   train_dataset = Dataset(config.get("filepath",None),  
               config.get("training_data_save_path"),
@@ -95,7 +96,7 @@ def train(strategy, config):
       cache_dir=config_cache_dir if config_cache_dir else None)
   with strategy.scope():  
     model = model_class.from_pretrained(
-      model_name_or_path,
+      model_name_or_path_,
       config=pretrained_config,
       cache_dir=model_cache_dir if model_cache_dir else None)  
     ##### Optimizers
