@@ -25,7 +25,7 @@ v_query = query["sentence_embeddings"]
 
 v_db = normalize(v_db)
 v_query = normalize(v_query)
-
+cosine_similarity_ = cosine_similarity(v_query,v_db)
 d = v_db.shape[-1]
 assert v_query.shape[-1] == d
 assert len(query_lines)==v_query.shape[0]
@@ -45,5 +45,5 @@ for i in range(len(I)):
         print("\t - ",database_lines[I[i][j]])
         print("\t - at distance %f"%D[i][j])
     print("\t + real match: %s"%database_lines[i])
-    print("\t at distance", cosine_similarity(v_query[i],v_db[i]))
+    print("\t at distance", cosine_similarity_[i])
 print(accuracy_score(np.arange(index.ntotal), I[:,0]))
