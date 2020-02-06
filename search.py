@@ -1,7 +1,7 @@
 import faiss
 import numpy as np
 import argparse
-
+import sklearn
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--vector_database", required=True , help="configuration file")
@@ -39,3 +39,5 @@ for i in range(len(I)):
     for j in range(k):
         print("\t - ",database_lines[I[i][j]])
         print("\t - at distance %f"%D[i][j])
+
+print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
