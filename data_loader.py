@@ -485,12 +485,28 @@ class Dataset() :
           false_tgt_id = (id + np.random.choice(self.dataset_size,1)[0])%self.dataset_size
           print(line_read_tgt[false_tgt_id], file=f_write_false_tgt)
 
+  def inference_prepare(self,mode="e"):
+    lines = []
+    for file_path in self.files:
+      with open(file_path,"r") as f:
+        line_read_src = f.readlines()
+        line_read_src = [l.strip() for l in line_read_src]
+        lines.extend(line_read_src)
+    print("There are %d sentences to encode"%len(lines))
+    with open(self.src+".%s"%mode,"w") as f_write_src:
+      for l in lines:
+        print(l, file=f_write_src)
+
   def create_one_epoch(self, do_shuffle=True, mode="p", lang=0):
     print("Creating training data files")
-    if do_shuffle:
-      self.shuffle(mode=mode)
+    if mode=="e":
+      self.inference_prepare()
     else:
-      self.copy(mode=mode)
+      if do_shuffle:
+        self.shuffle(mode=mode)
+      else:
+        self.copy(mode=mode)
+
     print("finished creating training data files")
     
     if mode =="p":
