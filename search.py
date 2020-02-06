@@ -2,6 +2,7 @@ import faiss
 import numpy as np
 import argparse
 from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import normalize
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument("--vector_database", required=True , help="configuration file")
 parser.add_argument("--text_database", required=True , help="configuration file")
@@ -20,6 +21,10 @@ with open(args.text_database,"r") as f:
 
 v_db = database["sentence_embeddings"]
 v_query = query["sentence_embeddings"]
+
+v_db = normalize(v_db)
+v_query = normalize(v_query)
+
 d = v_db.shape[-1]
 assert v_query.shape[-1] == d
 assert len(query_lines)==v_query.shape[0]
