@@ -45,5 +45,5 @@ for i in range(len(I)):
         print("\t - ",database_lines[I[i][j]])
         print("\t - at distance %f"%D[i][j])
     print("\t + real match: %s"%database_lines[i])
-    print("\t at distance", cosine_similarity_[i])
+    print("\t at distance", cosine_similarity_[i,i])
 print(accuracy_score(np.arange(index.ntotal), I[:,0]))
