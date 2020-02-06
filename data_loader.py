@@ -336,26 +336,9 @@ def inference_pipeline(batch_size,
                        num_threads=None,
                        prefetch_buffer_size=None):
 
-  def _inject_index(index, x):
-    x["index"] = index
-    return x
-
   def _pipeline(dataset):
-    if process_fn is not None:
-      dataset = dataset.map(process_fn, num_parallel_calls=num_threads)
-    if length_bucket_width is not None and length_bucket_width > 0:
-      if length_fn is None:
-        raise ValueError("length_fn is required when reordering by length")
-      if not isinstance(_get_output_shapes(dataset), dict):
-        raise ValueError("Reordering by length expects dataset elements to be Python dicts")
-      dataset = dataset.enumerate()
-      dataset = dataset.map(_inject_index)
-      dataset = dataset.apply(batch_sequence_dataset(
-          batch_size,
-          length_bucket_width=length_bucket_width,
-          length_fn=length_fn))
-    else:
-      dataset = dataset.apply(batch_dataset(batch_size))
+    dataset = dataset.map(process_fn, num_parallel_calls=num_threads)
+    dataset = dataset.apply(batch_dataset(batch_size))
     dataset = dataset.prefetch(prefetch_buffer_size)
     return dataset
 
