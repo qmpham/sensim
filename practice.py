@@ -295,6 +295,7 @@ def main():
     train(strategy, config, config_class, model_class, tokenizer_class)
   elif args.run == "encode":
     encode_config_file = args.encode
+    print("loading %s"%encode_config_file)
     with open(encode_config_file, "r") as stream:
       encode_config = yaml.load(stream)
     config_class_name = config.get("config_class_name","xlm")
