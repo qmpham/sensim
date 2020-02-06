@@ -36,6 +36,6 @@ D, I = index.search(v_query, k)     # tgt -> src search
 for i in range(len(I)):
     print("sentence: %s"%query_lines[i])
     print("%d neighbors: "%k)
-    for j in len(k):
+    for j in range(k):
         print(database_lines[I[j]])
         print("at distance %f"%D[i][j])
