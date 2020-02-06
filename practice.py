@@ -70,7 +70,7 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   D, I = index.search(tgt_sentences, k)     # tgt -> src search  
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
-def encode(lang, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
+def encode(lang, checkpoint_path, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -99,7 +99,8 @@ def encode(lang, dataset_path, config, config_class, model_class, tokenizer_clas
   checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
   if checkpoint_manager.latest_checkpoint is not None:
     tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
-    checkpoint_path = checkpoint_manager.latest_checkpoint
+    if checkpoint_path == None:
+      checkpoint_path = checkpoint_manager.latest_checkpoint
     checkpoint.restore(checkpoint_path)
   iterator = iter(dataset.create_one_epoch(mode="e", lang=lang)) 
 
@@ -321,7 +322,7 @@ def main():
     tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
     dataset_path = encode_config.get("dataset_path")
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    encode(int(args.lang), dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
+    encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
 
 if __name__ == "__main__":
   main()
