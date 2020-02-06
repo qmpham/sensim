@@ -229,8 +229,8 @@ def inference_process_fn_(tokenizer):
     def _python_wrapper(string_t):
       string = tf.compat.as_text(string_t.numpy())      
       tokens = tokenizer.encode(string,add_special_tokens=True)
-      print(tokens)
       langs = [lang] * len(tokens)
+      print(langs)
       return tf.constant(tokens), tf.constant(langs)
     tokens, langs = tf.py_function(_python_wrapper, [text], (tf.int32, tf.int32))
     tokens.set_shape([None])
