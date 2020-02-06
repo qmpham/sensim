@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from transformers import *
 from transformers import pipeline, glue_convert_examples_to_features
-from data_loader import training_pipeline, process_fn_, Dataset, function_on_next
+from data_loader import training_pipeline, Dataset, function_on_next
 from model import TFXLMForSequenceEmbedding, TFXLMForSequenceEmbedding_LSTM
 import argparse
 import logging
