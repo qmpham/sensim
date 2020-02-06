@@ -226,13 +226,13 @@ def training_process_fn_(tokenizer):
 def inference_process_fn_(tokenizer):
   @tf.autograph.experimental.do_not_convert
   def _tokenize_tensor(text, lang):    
-    def _python_wrapper(string_t):
+    def _python_wrapper(string_t, lang):
       string = tf.compat.as_text(string_t.numpy())      
       tokens = tokenizer.encode(string,add_special_tokens=True)
       langs = [lang.numpy()] * len(tokens)
       print(langs)
       return tf.constant(tokens), tf.constant(langs)
-    tokens, langs = tf.py_function(_python_wrapper, [text], (tf.int32, tf.int32))
+    tokens, langs = tf.py_function(_python_wrapper, [text, lang], (tf.int32, tf.int32))
     tokens.set_shape([None])
     langs.set_shape([None])
     return tokens, langs
