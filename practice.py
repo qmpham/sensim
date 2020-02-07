@@ -98,9 +98,10 @@ def encode(lang, checkpoint_path, dataset_path, config, config_class, model_clas
   checkpoint = tf.train.Checkpoint(model=model)     
   checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
   if checkpoint_manager.latest_checkpoint is not None:
-    tf.get_logger().info("Restoring parameters from %s", checkpoint_manager.latest_checkpoint)
+    
     if checkpoint_path == None:
       checkpoint_path = checkpoint_manager.latest_checkpoint
+    tf.get_logger().info("Restoring parameters from %s", checkpoint_path)
     checkpoint.restore(checkpoint_path)
   iterator = iter(dataset.create_one_epoch(mode="e", lang=lang)) 
 
