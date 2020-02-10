@@ -163,8 +163,9 @@ def train(strategy, config, config_class, model_class, tokenizer_class):
   def _accumulate_gradients(src, tgt, sign):
     src_padding_mask = build_mask(src["input_ids"],src["lengths"])
     tgt_padding_mask = build_mask(tgt["input_ids"],tgt["lengths"])
-    align, aggregation_src, aggregation_tgt, loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=True)
+    align, aggregation_src, aggregation_tgt, loss, similarity_loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=True)
     #tf.print("aggregation_src", aggregation_src, "aggregation_tgt", aggregation_tgt, "sign", sign, summarize=1000)
+    loss = loss + similarity_loss * 0.1
     variables = model.trainable_variables
     print("var numb: ", len(variables))
     gradients = optimizer.get_gradients(loss, variables)

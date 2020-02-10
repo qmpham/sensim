@@ -35,7 +35,9 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         tgt = tf.nn.dropout(tgt, 0.1)
         print(sign_src, sign_tgt)
         self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.01
-            
+        src_sentence_embeddings = tf.map_fn(lambda xl: tf.reduce_mean(xl[0][:xl[1]],0), (src, src_inputs["lengths"]), dtype=tf.float32)
+        tgt_sentence_embeddings = tf.map_fn(lambda xl: tf.reduce_mean(xl[0][:xl[1]],0), (tgt, tgt_inputs["lengths"]), dtype=tf.float32)
+        
         R = 1.0
         if self.config["aggr"] == "lse":
             self.aggregation_src = tf.divide(tf.math.log(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1], :], 0),
@@ -69,8 +71,8 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         self.loss_tgt = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
                                                          (self.output_tgt, tgt_inputs["lengths"]), dtype=tf.float32))
         self.loss = self.loss_tgt + self.loss_src
-        
-        return self.align, self.aggregation_src, self.aggregation_tgt, self.loss
+        self.similarity_loss = tf.reduce_mean(tf.map_fn(lambda st: tf.matmul(st[0],tf.transpose(st[1])),(src_sentence_embeddings, tgt_sentence_embeddings), dtype=tf.float32)) * sign_src
+        return self.align, self.aggregation_src, self.aggregation_tgt, self.loss, self.similarity_loss
 
     def encode(self, inputs, padding_mask, lang="en"):
       output = self.transformer(inputs, training=False)[0]
