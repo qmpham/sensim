@@ -71,7 +71,7 @@ class TFXLMForSequenceEmbedding(TFXLMPreTrainedModel):
         self.loss_tgt = tf.reduce_mean(tf.map_fn(lambda xl: tf.reduce_sum(xl[0][:xl[1]]),
                                                          (self.output_tgt, tgt_inputs["lengths"]), dtype=tf.float32))
         self.loss = self.loss_tgt + self.loss_src
-        self.similarity_loss = tf.reduce_mean(tf.map_fn(lambda st: tf.matmul(st[0],tf.transpose(st[1])),(src_sentence_embeddings, tgt_sentence_embeddings), dtype=tf.float32)) * sign_src
+        self.similarity_loss = tf.reduce_mean(tf.map_fn(lambda st: tf.matmul(tf.expand_dims(st[0],1),tf.expand_dims(st[1],0)),(src_sentence_embeddings, tgt_sentence_embeddings), dtype=tf.float32)) * sign_src
         return self.align, self.aggregation_src, self.aggregation_tgt, self.loss, self.similarity_loss
 
     def encode(self, inputs, padding_mask, lang="en"):
