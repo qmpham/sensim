@@ -46,4 +46,4 @@ for i in range(len(I)):
         print("\t - at distance %f"%D[i][j])
     print("\t + real match: %s"%database_lines[i])
     print("\t at distance", cosine_similarity_[i,i])
-print(accuracy_score(np.arange(index.ntotal), I[:,0]))
+print(accuracy_score(np.arange(v_query.shape[0]), I[:,0]))
