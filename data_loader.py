@@ -435,9 +435,9 @@ class Dataset() :
         print(l, file=f_write_src)
 
   def create_one_epoch(self, do_shuffle=True, mode="p", lang=0):
-    print("Creating training data files")
-    print("language: ", lang)
+    print("Creating training data files")    
     if mode=="e":
+      print("encoding language: ", lang)
       self.inference_prepare()
     else:
       if do_shuffle:
