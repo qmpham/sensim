@@ -299,7 +299,7 @@ def main():
   parser.add_argument("--file")
   parser.add_argument("--ckpt", default=None)
   parser.add_argument("--output", default="sentembedding")
-  parser.add_argument("--encode_path")
+  parser.add_argument("--dataset_path")
   parser.add_argument("--lang")
   args = parser.parse_args()
   print("Running mode: ", args.run)
