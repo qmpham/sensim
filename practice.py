@@ -169,6 +169,9 @@ def train(strategy, config, config_class, model_class, tokenizer_class):
     loss = loss + similarity_loss * 0.1
     variables = model.trainable_variables
     print("var numb: ", len(variables))
+    for var in variables:
+      print(var.name)
+      print(var)
     gradients = optimizer.get_gradients(loss, variables)
     #gradients = [(tf.clip_by_norm(grad, 0.1)) for grad in gradients]
     gradient_accumulator(gradients)
@@ -315,16 +318,9 @@ def main():
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
     train(strategy, config, config_class, model_class, tokenizer_class)
   elif args.run == "encode":
-    """
-    encode_config_file = args.encode_path
-    print("encode_config_file: %s"%encode_config_file)
-    with open(encode_config_file, "r") as stream:
-      encode_config = yaml.load(stream)
-    """
     config_class_name = config.get("config_class_name","xlm")
     model_class_name = config.get("model_class_name","xlm")
     tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
-    #dataset_path = encode_config.get("dataset_path")
     dataset_path = args.dataset_path
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
     encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
