@@ -122,7 +122,7 @@ def encode(lang, checkpoint_path, dataset_path, config, config_class, model_clas
   np.savez(output,sentence_embeddings=src_sentences)
   return True
 
-def train(strategy, config, config_class, model_class, tokenizer_class, on_top=False):
+def train(strategy, optimizer, config, config_class, model_class, tokenizer_class, on_top=False):
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -147,9 +147,7 @@ def train(strategy, config, config_class, model_class, tokenizer_class, on_top=F
       model_name_or_path_,
       config=pretrained_config,
       cache_dir=model_cache_dir if model_cache_dir else None)  
-    ##### Optimizers
-    learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",32))
-    optimizer = tfa.optimizers.LazyAdam(learning_rate)
+    
     checkpoint = tf.train.Checkpoint(model=model, optimizer=optimizer)     
     checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
     if checkpoint_manager.latest_checkpoint is not None:
@@ -322,8 +320,12 @@ def main():
     config_class_name = config.get("config_class_name","xlm")
     model_class_name = config.get("model_class_name","xlm")
     tokenizer_class_name = config.get("tokenizer_class_name","xlm")
+    ##### Optimizers
+    learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",32))
+    optimizer = tfa.optimizers.LazyAdam(1.0)
+    #####
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    train(strategy, config, config_class, model_class, tokenizer_class, on_top=config.get("on_top",False))
+    train(strategy, optimizer, config, config_class, model_class, tokenizer_class, on_top=config.get("on_top",False))
   elif args.run == "encode":
     config_class_name = config.get("config_class_name","xlm")
     model_class_name = config.get("model_class_name","xlm")
