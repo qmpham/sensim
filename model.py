@@ -102,8 +102,8 @@ class TFXLMForSequenceEmbedding_LSTM(TFXLMPreTrainedModel):
         tgt_inputs = inputs[1]
         src_transformer_outputs = self.transformer(src_inputs, training=training)
         tgt_transformer_outputs = self.transformer(tgt_inputs, training=training)
-        src_output = tf.stop_gradient(src_transformer_outputs[0])
-        tgt_output = tf.stop_gradient(tgt_transformer_outputs[0])
+        src_output = src_transformer_outputs[0]
+        tgt_output = tgt_transformer_outputs[0]
         src, _, _, src_fw_last, src_bw_last = self.src_encoder(src_output, mask=src_padding_mask, training=training)
         tgt, _, _, tgt_fw_last, tgt_bw_last = self.tgt_encoder(tgt_output, mask=tgt_padding_mask, training=training) 
         src = tf.nn.dropout(src, 0.1)
