@@ -122,7 +122,7 @@ def encode(lang, checkpoint_path, dataset_path, config, config_class, model_clas
   np.savez(output,sentence_embeddings=src_sentences)
   return True
 
-def train(strategy, config, config_class, model_class, tokenizer_class):
+def train(strategy, config, config_class, model_class, tokenizer_class, on_top=False):
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -167,7 +167,10 @@ def train(strategy, config, config_class, model_class, tokenizer_class):
     align, aggregation_src, aggregation_tgt, loss, similarity_loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=True)
     #tf.print("aggregation_src", aggregation_src, "aggregation_tgt", aggregation_tgt, "sign", sign, summarize=1000)
     loss = loss + similarity_loss * 0.1
-    variables = model.trainable_variables
+    if on_top:
+      variables = [var for var in model.trainable_variables if "tfxlm_for_sequence_embedding_lstm" in var.name]
+    else:
+      variables = model.trainable_variables
     print("var numb: ", len(variables))
     for var in variables:
       print(var.name)
@@ -179,7 +182,11 @@ def train(strategy, config, config_class, model_class, tokenizer_class):
     return loss, num_examples
 
   def _apply_gradients():
-    variables = model.trainable_variables
+    #variables = model.trainable_variables
+    if on_top:
+      variables = [var for var in model.trainable_variables if "tfxlm_for_sequence_embedding_lstm" in var.name]
+    else:
+      variables = model.trainable_variables
     grads_and_vars = []
     for gradient, variable in zip(gradient_accumulator.gradients, variables):
       scaled_gradient = gradient / 2.0
@@ -316,7 +323,7 @@ def main():
     model_class_name = config.get("model_class_name","xlm")
     tokenizer_class_name = config.get("tokenizer_class_name","xlm")
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    train(strategy, config, config_class, model_class, tokenizer_class)
+    train(strategy, config, config_class, model_class, tokenizer_class, on_top=config.get("on_top",False))
   elif args.run == "encode":
     config_class_name = config.get("config_class_name","xlm")
     model_class_name = config.get("model_class_name","xlm")
