@@ -321,8 +321,9 @@ def main():
     model_class_name = config.get("model_class_name","xlm")
     tokenizer_class_name = config.get("tokenizer_class_name","xlm")
     ##### Optimizers
-    learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",32))
-    optimizer = tfa.optimizers.LazyAdam(1.0)
+    #learning_rate = ScheduleWrapper(schedule=NoamDecay(scale=1.0, model_dim=512, warmup_steps=config.get("warmup_steps", 4000)), step_duration= config.get("step_duration",32))
+    learning_rate = ScheduleWrapper(schedule=tf.keras.optimizers.schedules.PolynomialDecay(1.0, 10000, end_learning_rate=0.0001), step_duration=1)
+    optimizer = tfa.optimizers.LazyAdam(learning_rate)
     #####
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
     train(strategy, optimizer, config, config_class, model_class, tokenizer_class, on_top=config.get("on_top",False))
