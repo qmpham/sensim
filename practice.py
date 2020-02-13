@@ -122,7 +122,7 @@ def encode(lang, checkpoint_path, dataset_path, config, config_class, model_clas
   np.savez(output,sentence_embeddings=src_sentences)
   return True
 
-def train(strategy, optimizer, config, config_class, model_class, tokenizer_class, on_top=False):
+def train(strategy, optimizer, learning_rate, config, config_class, model_class, tokenizer_class, on_top=False):
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -326,7 +326,7 @@ def main():
     optimizer = tfa.optimizers.LazyAdam(learning_rate)
     #####
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    train(strategy, optimizer, config, config_class, model_class, tokenizer_class, on_top=config.get("on_top",False))
+    train(strategy, optimizer, learning_rate, config, config_class, model_class, tokenizer_class, on_top=config.get("on_top",False))
   elif args.run == "encode":
     config_class_name = config.get("config_class_name","xlm")
     model_class_name = config.get("model_class_name","xlm")
