@@ -168,7 +168,7 @@ def train(strategy, config, config_class, model_class, tokenizer_class, on_top=F
     #tf.print("aggregation_src", aggregation_src, "aggregation_tgt", aggregation_tgt, "sign", sign, summarize=1000)
     loss = loss + similarity_loss * 0.1
     if on_top:
-      variables = [var for var in model.trainable_variables if "tfxlm_for_sequence_embedding_lstm" in var.name]
+      variables = [var for var in model.trainable_variables if "bidirectional" in var.name]
     else:
       variables = model.trainable_variables
     print("var numb: ", len(variables))
@@ -184,7 +184,7 @@ def train(strategy, config, config_class, model_class, tokenizer_class, on_top=F
   def _apply_gradients():
     #variables = model.trainable_variables
     if on_top:
-      variables = [var for var in model.trainable_variables if "tfxlm_for_sequence_embedding_lstm" in var.name]
+      variables = [var for var in model.trainable_variables if "bidirectional" in var.name]
     else:
       variables = model.trainable_variables
     grads_and_vars = []
