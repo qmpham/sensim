@@ -91,7 +91,7 @@ class TFXLMForSequenceEmbedding_LSTM(TFXLMPreTrainedModel):
         self.tgt_forward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=False, return_state=True)
         self.tgt_backward_layer = tf.keras.layers.LSTM(512, activation='relu', return_sequences=True, go_backwards=True, return_state=True)
         self.tgt_encoder = tf.keras.layers.Bidirectional(self.tgt_forward_layer, backward_layer=self.tgt_backward_layer)
-        self.config = {"aggr":"max"}
+        self.config = {"aggr":"lse"}
     @property
     def dummy_inputs(self):
         return ({"input_ids":tf.constant(DUMMY_INPUTS), "langs": tf.constant([[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]), "lengths": tf.constant([5,5,5])},
