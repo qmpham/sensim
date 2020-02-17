@@ -163,7 +163,7 @@ def train(strategy, optimizer, learning_rate, config, config_class, model_class,
     src_padding_mask = build_mask(src["input_ids"],src["lengths"])
     tgt_padding_mask = build_mask(tgt["input_ids"],tgt["lengths"])
     align, aggregation_src, aggregation_tgt, loss, similarity_loss = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=True)
-    #tf.print("aggregation_src", aggregation_src, "aggregation_tgt", aggregation_tgt, "sign", sign, summarize=1000)
+    tf.print("aggregation_src", aggregation_src, "aggregation_tgt", aggregation_tgt, "sign", sign, summarize=1000)
     loss = loss + similarity_loss * 0.1
     if on_top:
       variables = [var for var in model.trainable_variables if "bidirectional" in var.name]
