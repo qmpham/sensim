@@ -111,7 +111,7 @@ class TFXLMForSequenceEmbedding_LSTM(TFXLMPreTrainedModel):
         src_sentence_embeddings = tf.concat([src_fw_last, src_bw_last],1)
         tgt_sentence_embeddings = tf.concat([tgt_fw_last, tgt_bw_last],1)
         print(sign_src, sign_tgt)
-        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.01
+        self.align = tf.map_fn(lambda x: tf.matmul(x[0], tf.transpose(x[1])), (src, tgt), dtype=tf.float32, name="align") * 0.1
             
         R = 1.0
         if self.config["aggr"] == "lse":
