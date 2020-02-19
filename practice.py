@@ -112,6 +112,70 @@ def encode(lang, checkpoint_path, dataset_path, config, config_class, model_clas
     src_sentence_embedding = model.encode(src, padding_mask)    
     return src_sentence_embedding
   src_sentence_embedding_list = []  
+  maxcount = 1000000
+  count = 0
+  index = 0
+  while True:    
+    try:
+      src_sentence_embedding_ = encode_next()
+      src_sentence_embedding__ = src_sentence_embedding_.numpy()      
+      src_sentence_embedding_list.append(src_sentence_embedding__)
+      count += src_sentence_embedding__.shape[0]
+      if count > maxcount:
+        src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
+        np.savez(output+str(index),sentence_embeddings=src_sentences)
+        count = 0
+        src_sentence_embedding_list = []
+        index +=1
+    except tf.errors.OutOfRangeError:
+      break
+  if len(src_sentence_embedding_list)>0:
+    src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
+    np.savez(output+str(index),sentence_embeddings=src_sentences)
+  return True
+
+def encode_to_txt(lang, checkpoint_path, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
+  #####  
+  model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
+  config_cache_dir = config.get("pretrained_config_cache_dir")
+  model_cache_dir = config.get("pretrained_model_cache_dir")
+  tokenizer_cache_dir = config.get("pretrained_tokenizer_cache_dir")
+  model_name_or_path_ = config.get("model_name_or_path_","xlm-mlm-enfr-1024")
+  #####
+  dataset = Dataset(dataset_path,  
+              config.get("training_data_save_path"),
+              config.get("seq_size"), 
+              config.get("max_sents"), 
+              config.get("do_shuffle"), 
+              config.get("do_skip_empty"),
+              procedure="encode",
+              model_name_or_path = model_name_or_path,
+              tokenizer_class = tokenizer_class,
+              tokenizer_cache_dir = tokenizer_cache_dir)
+  pretrained_config = config_class.from_pretrained(
+      model_name_or_path,    
+      cache_dir=config_cache_dir if config_cache_dir else None)
+  model = model_class.from_pretrained(
+      model_name_or_path_,
+      config=pretrained_config,
+      cache_dir=model_cache_dir if model_cache_dir else None)
+  checkpoint = tf.train.Checkpoint(model=model)     
+  checkpoint_manager = tf.train.CheckpointManager(checkpoint, config["model_dir"], max_to_keep=5)
+  if checkpoint_manager.latest_checkpoint is not None:
+    
+    if checkpoint_path == None:
+      checkpoint_path = checkpoint_manager.latest_checkpoint
+    tf.get_logger().info("Restoring parameters from %s", checkpoint_path)
+    checkpoint.restore(checkpoint_path)
+  iterator = iter(dataset.create_one_epoch(mode="e", lang=lang)) 
+
+  @tf.function
+  def encode_next():    
+    src = next(iterator)
+    padding_mask = build_mask(src["input_ids"], src["lengths"])
+    src_sentence_embedding = model.encode(src, padding_mask)    
+    return src_sentence_embedding
+  src_sentence_embedding_list = []  
   while True:    
     try:
       src_sentence_embedding_ = encode_next()
