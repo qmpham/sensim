@@ -71,6 +71,8 @@ def evaluate(model, config, checkpoint_manager, checkpoint, ckpt_path, model_nam
   print(sklearn.metrics.accuracy_score(np.arange(index.ntotal), I))
   
 def encode(lang, checkpoint_path, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
+  #####
+  print("encoding %s in lang %d using ckpt %s"%(dataset_path, lang, checkpoint_path))
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -397,7 +399,20 @@ def main():
     tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
     dataset_path = args.dataset_path
     config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
-    encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
+    encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output)
+  elif args.run == "encode":
+    config_class_name = config.get("config_class_name","xlm")
+    model_class_name = config.get("model_class_name","xlm")
+    tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
+    dataset_path = args.dataset_path
+    config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
+    if "yml" in dataset_path:
+      with open(dataset_path,"r") as stream:
+        encode_config = yaml.load(stream)
+      for (lang, path, output) in zip(encode_config["langs"], encode_config["paths"], encode_config["outputs"]):        
+        encode(int(lang), config["ckpt"], path, config, config_class, model_class, tokenizer_class, output=output)
+    else:
+      encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
 
 if __name__ == "__main__":
   main()
