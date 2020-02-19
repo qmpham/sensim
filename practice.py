@@ -404,7 +404,7 @@ def main():
       with open(dataset_path,"r") as stream:
         encode_config = yaml.load(stream)
       for (lang, path, output) in zip(encode_config["langs"], encode_config["paths"], encode_config["outputs"]):        
-        encode(int(lang), config["ckpt"], path, config, config_class, model_class, tokenizer_class, output=output)
+        encode(int(lang), encode_config["ckpt"], path, config, config_class, model_class, tokenizer_class, output=output)
     else:
       encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
 
