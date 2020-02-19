@@ -136,7 +136,9 @@ def encode(lang, checkpoint_path, dataset_path, config, config_class, model_clas
     np.savez(output+str(index),sentence_embeddings=src_sentences)
   return True
 
-def encode_to_txt(lang, checkpoint_path, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
+def align(lang, checkpoint_path, dataset_path, config, config_class, model_class, tokenizer_class, output="output"):
+  #####
+  print("encoding %s in lang %d using ckpt %s"%(dataset_path, lang, checkpoint_path))
   #####  
   model_name_or_path = config.get("model_name_or_path","xlm-mlm-enfr-1024")
   config_cache_dir = config.get("pretrained_config_cache_dir")
@@ -150,7 +152,7 @@ def encode_to_txt(lang, checkpoint_path, dataset_path, config, config_class, mod
               config.get("max_sents"), 
               config.get("do_shuffle"), 
               config.get("do_skip_empty"),
-              procedure="encode",
+              procedure="align",
               model_name_or_path = model_name_or_path,
               tokenizer_class = tokenizer_class,
               tokenizer_cache_dir = tokenizer_cache_dir)
@@ -169,23 +171,23 @@ def encode_to_txt(lang, checkpoint_path, dataset_path, config, config_class, mod
       checkpoint_path = checkpoint_manager.latest_checkpoint
     tf.get_logger().info("Restoring parameters from %s", checkpoint_path)
     checkpoint.restore(checkpoint_path)
-  iterator = iter(dataset.create_one_epoch(mode="e", lang=lang)) 
+  iterator = iter(dataset.create_one_epoch(mode="p", lang=lang)) 
 
   @tf.function
   def encode_next():    
-    src = next(iterator)
-    padding_mask = build_mask(src["input_ids"], src["lengths"])
-    src_sentence_embedding = model.encode(src, padding_mask)    
-    return src_sentence_embedding
-  src_sentence_embedding_list = []  
+    src, tgt = next(iterator)
+    src_padding_mask = build_mask(src["input_ids"],src["lengths"])
+    tgt_padding_mask = build_mask(tgt["input_ids"],tgt["lengths"])
+    sign = -1.0
+    align, _, _, _, _ = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=False)   
+    tf.print(align)
+
   while True:    
     try:
-      src_sentence_embedding_ = encode_next()
-      src_sentence_embedding_list.append(src_sentence_embedding_.numpy())
+      encode_next()
     except tf.errors.OutOfRangeError:
       break
-  src_sentences = np.concatenate(src_sentence_embedding_list, axis=0)
-  np.savez(output,sentence_embeddings=src_sentences)
+
   return True
 
 def train(strategy, optimizer, learning_rate, config, config_class, model_class, tokenizer_class, on_top=False):
@@ -407,6 +409,12 @@ def main():
         encode(int(lang), encode_config["ckpt"], path, config, config_class, model_class, tokenizer_class, output=output)
     else:
       encode(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
-
+  elif args.run =="align":
+    config_class_name = config.get("config_class_name","xlm")
+    model_class_name = config.get("model_class_name","xlm")
+    tokenizer_class_name = config.get("tokenizer_class_name","xlm") 
+    dataset_path = args.dataset_path
+    config_class, model_class, tokenizer_class = (config_class_dict[config_class_name], model_class_dict[model_class_name], tokenizer_class_dict[tokenizer_class_name])
+    align(int(args.lang), args.ckpt, dataset_path, config, config_class, model_class, tokenizer_class, output=args.output) 
 if __name__ == "__main__":
   main()
