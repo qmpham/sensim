@@ -172,7 +172,7 @@ def align(lang, checkpoint_path, dataset_path, config, config_class, model_class
     tf.get_logger().info("Restoring parameters from %s", checkpoint_path)
     checkpoint.restore(checkpoint_path)
   iterator = iter(dataset.create_one_epoch(mode="p", lang=lang)) 
-
+  
   @tf.function
   def encode_next():    
     src, tgt = next(iterator)
@@ -181,12 +181,21 @@ def align(lang, checkpoint_path, dataset_path, config, config_class, model_class
     sign = -1.0
     align, _, _, _, _ = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=False)   
     tf.print(align,summarize=1000)
+    return align
 
+  import matplotlib.pyplot as plt
+  import seaborn as sns
+  align_ = None
   while True:    
     try:
-      encode_next()
+      align = encode_next()
+      align_ = align.numpy()
     except tf.errors.OutOfRangeError:
       break
+  
+  fig, ax = plt.subplots(figsize=(6,6))
+  ax = sns.heatmap(align_, linewidths=.5, ax=ax, cbar=False)
+  fig.savefig('heatmap_align.pgf')
 
   return True
 
