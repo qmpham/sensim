@@ -180,7 +180,7 @@ def align(lang, checkpoint_path, dataset_path, config, config_class, model_class
     tgt_padding_mask = build_mask(tgt["input_ids"],tgt["lengths"])
     sign = -1.0
     align, _, _, _, _ = model((src,tgt),sign_src=sign, sign_tgt=sign, src_padding_mask=src_padding_mask, tgt_padding_mask=tgt_padding_mask, training=False)   
-    tf.print(align)
+    tf.print(align,summarize=1000)
 
   while True:    
     try:
