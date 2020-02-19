@@ -189,7 +189,7 @@ def align(lang, checkpoint_path, dataset_path, config, config_class, model_class
   while True:    
     try:
       align = encode_next()
-      align_ = align.numpy()
+      align_ = tf.squeeze(align).numpy()
     except tf.errors.OutOfRangeError:
       break
   
